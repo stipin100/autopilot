@@ -1,0 +1,57 @@
+AUTOPILOT - automated Pump.fun launcher
+=======================================
+
+WHAT IT DOES
+You make the coin's website + X account. You add the coin here with a launch time.
+AUTOPILOT then does everything by itself:
+  1. Fund wallet  - makes a fresh wallet for the coin and sends it SOL from your MAIN WALLET
+                    (10 minutes before launch)
+  2. Upload       - uploads the image + details (Pinata)
+  3. Launch       - launches on Pump.fun at your time, with your dev buy
+  4. Post on X    - posts the CA on X (only if you add X keys - otherwise press "Copy CA post"
+                    and post it yourself, then press "I posted it")
+  5. Checks       - counts outside wallets + volume. After the check time (default 5 min):
+                       enough outside wallets -> Earning
+                       not enough             -> Dud (sells dev bag + sends SOL back, if ticked)
+  6. Earning      - keeps watching. When your dev bag is worth 2x your dev buy it sells it all
+                    by itself and sends the SOL to the MAIN WALLET. Creator fees keep being
+                    claimed + sent to the MAIN WALLET (0.003 SOL stays in the coin wallet to pay for that)
+
+START
+1. Double-click START.bat. A black window opens - LEAVE IT OPEN (closing it stops everything).
+2. Your browser opens http://localhost:3480
+
+IT STARTS IN PRACTICE MODE (orange badge) - nothing real happens, fake traders.
+Try it first: + New coin -> fill it -> Launch time "Now" -> watch the stages move.
+
+GOING LIVE (real SOL)
+1. Close the black window.
+2. Open the file ".env" in this folder with Notepad.
+3. Change   SIMULATE=1   to   SIMULATE=0   and save.
+4. Double-click START.bat again. The badge turns green: "LIVE - real SOL".
+5. Copy the MAIN WALLET address at the top and send SOL to it from Phantom.
+   Each coin needs: dev buy + 0.03 SOL (example: 0.9 dev buy -> 0.93 SOL).
+6. Paste YOUR Phantom address in the box and press Save, so "Withdraw all" knows where to send.
+7. + New coin -> fill it in -> Add to autopilot. Done - it launches by itself at that time.
+   Your computer must be ON with the black window open at launch time.
+
+BUTTONS ON EACH COIN
+  Launch now      launch immediately instead of waiting
+  Copy CA post    copies the X post text with the CA filled in
+  Sell dev bag    sells all of the coin wallet's tokens
+  Claim fees      claims Pump.fun creator fees into the coin wallet
+  Withdraw SOL    sends the coin wallet's SOL back to the MAIN WALLET
+  Mark dud        gives up on it now (sells + withdraws if auto-sell is ticked)
+  Export key      copies the coin wallet's private key so you can import it into Phantom
+  Stop            stops it (before launch = it won't launch; SOL stays, press Withdraw SOL)
+
+OPTIONAL: AUTO-POST ON X
+X's API costs money now. If you have a developer app (developer.x.com) with
+"Read and write" permission, put its 4 keys into .env (X_API_KEY, X_API_SECRET,
+X_ACCESS_TOKEN, X_ACCESS_SECRET) and restart. Otherwise just use "Copy CA post".
+
+SAFETY - IMPORTANT
+- The "data" folder holds the secret keys of your main wallet and every coin wallet.
+  BACK IT UP (copy it to a USB stick). If you delete it, SOL in those wallets is lost.
+- Never send the data folder or any key to anyone. Never type your Phantom seed phrase anywhere.
+- Only keep in the main wallet what you plan to launch with. Withdraw profits to Phantom.

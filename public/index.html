@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AUTOPILOT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0f17; --card: #121825; --tile: #0e1420; --line: #1f2737; --line2: #2a3242;
+    --text: #e8ecf3; --muted: #8a93a6; --dim: #5b6477;
+    --green: #5fdc8a; --lime: #d5f26c; --blue: #5b93f0; --red: #f06b6b; --amber: #f2b45b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 22px 16px 80px; }
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .logo { font-weight: 800; font-size: 22px; letter-spacing: .5px; }
+  .logo span { color: var(--lime); }
+  .mode { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .mode.practice { background: #2a2410; color: var(--amber); border: 1px solid #5a4818; }
+  .mode.live { background: #102a18; color: var(--green); border: 1px solid #1d5a32; }
+  .warn { font-size: 12px; color: var(--amber); }
+  .spacer { flex: 1; }
+
+  .card { background: linear-gradient(180deg, #131a28, #10151f); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+  .btn { background: #161d2b; color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 13px; font: 600 13px Inter, sans-serif; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: #1c2536; }
+  .btn.lime { background: var(--lime); color: #11160a; border-color: var(--lime); }
+  .btn.lime:hover { filter: brightness(1.06); }
+  .btn.red { color: var(--red); }
+  .btn.ghost { background: transparent; border-color: transparent; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  a.btn { text-decoration: none; display: inline-block; }
+
+  .wallet { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
+  .wallet .addr { font: 600 13px ui-monospace, Consolas, monospace; word-break: break-all; }
+  .wallet .bal { font-size: 26px; font-weight: 800; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, textarea, select { background: var(--tile); color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 9px 11px; font: 14px Inter, sans-serif; width: 100%; }
+  textarea { resize: vertical; min-height: 64px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+
+  .form { display: none; }
+  .form.open { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid .full { grid-column: 1 / -1; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); }
+  .check input { width: auto; }
+  .sitebox { border: 1px solid var(--line2); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.02); }
+  .siteline { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .siteline a { color: var(--lime); }
+  .err { color: var(--red); font-size: 13px; min-height: 18px; }
+
+  .coin-head { display: flex; gap: 16px; align-items: flex-start; }
+  .coin-head img { width: 62px; height: 62px; border-radius: 14px; object-fit: cover; background: #000; flex: none; }
+  .coin-title { font-size: 20px; font-weight: 700; }
+  .coin-title .tk { color: var(--muted); font-weight: 600; }
+  .sub { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; color: var(--muted); }
+  .pill { padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; }
+  .pill.live { color: var(--amber); background: #2a1f0e; border-color: #5a3f17; }
+  .pill.sched { color: var(--blue); background: #0f1d33; border-color: #1f3a66; }
+  .pill.earn { color: var(--green); background: #0f2a1a; border-color: #1d5a32; }
+  .pill.dud, .pill.fail { color: var(--red); background: #2a1010; border-color: #5a1d1d; }
+  .pill.stop { color: var(--muted); background: #161b25; border-color: var(--line2); }
+
+  .stages { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 20px 0 14px; }
+  .stage i { display: block; height: 4px; border-radius: 4px; background: var(--line2); margin-bottom: 7px; }
+  .stage span { font-size: 12px; color: var(--muted); }
+  .stage.done i { background: var(--green); }
+  .stage.now i { background: var(--lime); }
+  .stage.now span { color: var(--lime); font-weight: 600; }
+  .stage.bad i { background: var(--red); }
+  .stage.bad span { color: var(--red); font-weight: 600; }
+  .stage.skip i { background: var(--amber); }
+  .stage.todo span { color: var(--dim); }
+
+  .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .tile { background: var(--tile); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 19px; font-weight: 700; }
+  .tile span { font-size: 12px; color: var(--muted); }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+
+  .checkline { margin: 16px 0 8px; color: var(--muted); }
+  .bars { display: flex; align-items: flex-end; gap: 10%; height: 54px; padding: 0 5%; }
+  .bars div { flex: 1; max-width: 280px; background: var(--blue); min-height: 2px; border-radius: 2px 2px 0 0; }
+  .bars.many { gap: 4px; padding: 0; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+  .list { margin-top: 8px; font-size: 12.5px; display: grid; gap: 3px; max-height: 240px; overflow: auto; }
+  .list div { display: grid; grid-template-columns: 70px 1fr 90px; gap: 8px; padding: 4px 8px; background: var(--tile); border-radius: 6px; }
+  .list.log div { grid-template-columns: 70px 1fr; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .big { font-size: 34px; font-weight: 800; margin: 8px 0 2px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1c2536; border: 1px solid var(--line2); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 860px) {
+    .tiles, .stages { grid-template-columns: repeat(3, 1fr); }
+    .grid { grid-template-columns: 1fr; }
+    .wallet { grid-template-columns: 1fr; }
+    .coin-head { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">AUTO<span>PILOT</span></div>
+    <div id="mode" class="mode"></div>
+    <div id="warns" class="warn"></div>
+    <div class="spacer"></div>
+    <button class="btn lime" id="newBtn">+ New coin</button>
+  </header>
+
+  <div class="card wallet">
+    <div>
+      <div class="muted small">MAIN WALLET - send SOL here from Phantom; AUTOPILOT funds each coin's fresh wallet from it</div>
+      <div class="row" style="margin-top:6px"><span class="addr" id="mainAddr">...</span><button class="btn" data-copy="main">Copy</button></div>
+      <div class="row" style="margin-top:12px; max-width:640px">
+        <input id="withdrawTo" placeholder="Your Phantom address (where Withdraw all sends SOL)">
+        <button class="btn" id="saveTo">Save</button>
+        <button class="btn" id="withdrawMain">Withdraw all</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <a class="btn" id="backupBtn" href="/api/backup">Download backup</a>
+        <label class="btn" style="margin:0">Restore backup<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+        <button class="btn red" id="logoutBtn" hidden>Log out</button>
+      </div>
+    </div>
+    <div style="text-align:right"><div class="bal" id="mainBal">-</div><div class="muted small">SOL</div></div>
+  </div>
+
+  <form class="card form" id="form">
+    <div class="coin-title" style="margin-bottom:14px">New coin</div>
+    <div class="grid">
+      <div><label>Image (PNG / JPG / GIF / WebP)</label><input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required></div>
+      <div><label>Name</label><input name="name" maxlength="32" placeholder="Anonymous Card" required></div>
+      <div><label>Ticker</label><input name="symbol" maxlength="11" placeholder="ANONCARD" required></div>
+      <div class="full"><label>Description</label><textarea name="description" maxlength="1000"></textarea></div>
+      <div><label>Website (leave empty if AUTOPILOT makes it below)</label><input name="website" placeholder="https://..."></div>
+      <div><label>X (Twitter) link</label><input name="twitter" placeholder="https://x.com/..."></div>
+      <div><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
+      <div class="full sitebox">
+        <label class="check" style="margin-bottom:12px"><input type="checkbox" name="makeSite" id="makeSite"> <b>Make the website for me</b>&nbsp;<span class="muted">- site + banner, live on its own subdomain in about a minute</span></label>
+        <div class="grid" id="siteFields" style="display:none">
+          <div><label>Subdomain</label><div class="row" style="flex-wrap:nowrap"><input name="sub" id="sub" placeholder="ticker" style="flex:1"><span class="muted small" id="siteDomain">.degenlab.fun</span></div></div>
+          <div><label>Tagline (one short line)</label><input name="tagline" maxlength="80" placeholder="running on one. barely."></div>
+          <div><label>Main color (picked from the logo)</label><input name="accent" id="accent" type="color" value="#ff86b6" style="height:40px; padding:3px"></div>
+          <div class="full"><label>Story for the website (2-3 sentences, leave empty to use the description)</label><textarea name="story" maxlength="600"></textarea></div>
+        </div>
+      </div>
+      <div><label>Dev buy (SOL)</label><input name="devBuySol" type="number" step="0.01" min="0" max="20" value="0.9"></div>
+      <div>
+        <label>Launch time</label>
+        <div class="row">
+          <select id="when" style="width:110px"><option value="now">Now</option><option value="at" selected>At time</option></select>
+          <input type="datetime-local" id="whenAt" style="flex:1; width:auto">
+        </div>
+      </div>
+      <div><label>Check after (minutes)</label><input name="checkMinutes" type="number" min="1" max="120" value="5"></div>
+      <div><label>Needs this many outside wallets to pass</label><input name="minWallets" type="number" min="1" value="15"></div>
+      <div><label>Auto-sell dev bag when it's worth (x dev buy, 0 = off)</label><input name="takeProfitX" type="number" step="0.1" min="0" value="2"></div>
+      <div><label>Auto-claim + withdraw creator fees at (SOL, 0 = off)</label><input name="autoClaimSol" type="number" step="0.01" min="0" value="0.02"></div>
+      <div style="align-self:end"><label class="check"><input type="checkbox" name="autoSellDud" checked> If it fails the check: sell dev bag + send SOL back to main</label></div>
+      <div class="full"><label>X post after launch - {NAME} {TICKER} {CA} {WEBSITE} {LINK} are filled in</label>
+        <textarea name="xPost" maxlength="280">{NAME} ${TICKER} is live on Pump.fun
+
+CA: {CA}
+
+{WEBSITE}</textarea></div>
+    </div>
+    <div class="err" id="formErr"></div>
+    <div class="row"><button class="btn lime" type="submit" id="addBtn">Add to autopilot</button><button class="btn ghost" type="button" id="cancelBtn">Cancel</button></div>
+  </form>
+
+  <div id="coins"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmt = (n, d = 3) => (Number(n) || 0).toFixed(d);
+let state = null, skew = 0;
+const openDetails = new Set();
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+async function copy(text, what) {
+  await navigator.clipboard.writeText(text);
+  toast(`${what} copied`);
+}
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Something went wrong");
+  return j;
+}
+
+function dur(ms) {
+  if (ms <= 0) return "now";
+  const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${String(r).padStart(2, "0")}s` : `${r}s`;
+}
+const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const short = (a) => a ? `${a.slice(0, 4)}...${a.slice(-4)}` : "";
+
+const STAGES = [["fund", "Fund wallet"], ["upload", "Upload"], ["launch", "Launch"], ["post", "Post on X"], ["checks", "Checks"], ["earning", "Earning"]];
+function stageClass(c, i) {
+  const at = { fund: 0, upload: 1, launch: 2, post: 3, checks: 4, earning: 5, dud: 4, failed: 2 }[c.stage] ?? (c.mint ? 4 : 0);
+  if (c.stage === "stopped") return i < at ? "done" : "todo";
+  if (i === 3 && i < at && !c.posted) return "skip";
+  if (i < at) return "done";
+  if (i === at) return c.stage === "dud" || c.stage === "failed" ? "bad" : c.stage === "earning" ? "done" : "now";
+  return "todo";
+}
+const PILL = {
+  fund: ["sched", "Scheduled"], upload: ["sched", "Uploading"], launch: ["sched", "Ready"], post: ["live", "Live - posting"],
+  checks: ["live", "Live - checking"], earning: ["earn", "Earning"], dud: ["dud", "Dud"], failed: ["fail", "Launch failed"], stopped: ["stop", "Stopped"],
+};
+
+function detailsBlock(c, key, title, inner) {
+  const id = `${c.id}:${key}`;
+  return `<details data-d="${id}" ${openDetails.has(id) ? "open" : ""}><summary>${title}</summary>${inner}</details>`;
+}
+
+function siteLine(c) {
+  if (!c.makeSite) return c.website ? `<div class="siteline">Website: <a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a></div>` : "";
+  const s = c.site ?? {};
+  const rebuild = `<button class="btn" data-act="rebuildSite" data-id="${c.id}" style="margin-left:8px">Rebuild website</button>`;
+  if (s.status === "building") return `<div class="siteline">Website: building ${esc(c.sub)}.${esc(state.site.domain)} ...</div>`;
+  if (s.status === "failed") return `<div class="siteline" style="color:var(--red)">Website failed: ${esc(s.error)} ${rebuild}</div>`;
+  if (s.status === "live") return `<div class="siteline">Website: <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a> · <a href="/banner/${c.id}">download banner</a> · <a href="/img/${esc(c.image)}" download>download logo</a></div>`;
+  return "";
+}
+
+function coinCard(c, now) {
+  const [pc, pl] = c.stage === "earning" && c.soldAt ? ["earn", "Sold - collecting fees"] : PILL[c.stage] ?? ["stop", c.stage];
+  const st = c.stats;
+  const live = !!c.mint;
+  let body;
+  if (!live) {
+    const left = c.launchAt - now;
+    const funded = c.stage !== "fund";
+    body = `
+      <div class="big">${funded ? dur(left) : left > 600000 ? dur(left - 600000) : "now"}</div>
+      <div class="muted">${funded ? "until launch" : left > 600000 ? "until the fresh wallet is funded" : "funding the fresh wallet"} · goes live at ${clock(c.launchAt)} · dev buy ${c.devBuySol} SOL</div>
+      <div class="muted small" style="margin-top:6px">${esc(c.status)}</div>
+      <div class="muted small mono" style="margin-top:4px">fresh wallet ${esc(c.wallet)}</div>`;
+  } else {
+    const mins = st.volumeByMinute.length ? st.volumeByMinute : [0];
+    const max = Math.max(...mins, 0.0001);
+    const checkLeft = c.launchedAt + c.checkMinutes * 60000 - now;
+    const tp = c.takeProfitX ?? 2;
+    const checkLine = c.stage === "checks"
+      ? `${c.checkMinutes}-min check in ${dur(checkLeft)} — needs ${c.minWallets}+ outside wallets`
+      : c.stage === "earning" ? `${c.soldAt ? "Dev bag sold · still collecting creator fees" : `Passed the check${tp ? ` · auto-sells at ${tp}x` : ""}`} · ${fmt(st.claimable, 4)} SOL fees claimable${c.autoClaimSol > 0 ? ` · auto-claims at ${c.autoClaimSol} SOL` : ""}`
+      : c.stage === "dud" ? `Dud — ${st.outsideWallets}/${c.minWallets} outside wallets at the check · still collecting creator fees` : esc(c.status);
+    const profitCls = st.profit >= 0 ? "pos" : "neg";
+    body = `
+      <div class="tiles">
+        <div class="tile"><b>${st.outsideWallets}</b><span>outside wallets</span></div>
+        <div class="tile"><b>${fmt(st.outsideVolume, 2)}</b><span>outside volume (SOL)</span></div>
+        <div class="tile"><b>${fmt(st.feesClaimed)}</b><span>fees claimed (SOL)${st.claimable > 0.0005 ? ` · ${fmt(st.claimable)} ready` : ""}</span></div>
+        <div class="tile"><b>${c.soldAt && !st.devBagSol ? "sold" : fmt(st.devBagSol)}</b><span>dev bag (SOL) · peak ${fmt(st.peakX)}x${tp && !c.soldAt ? ` · sells at ${tp}x` : ""}</span></div>
+        <div class="tile"><b class="${profitCls}">${st.profit >= 0 ? "+" : ""}${fmt(st.profit)}</b><span>profit so far (est.)</span></div>
+        <div class="tile"><b>${st.bundles.length}</b><span>bundle groups</span></div>
+      </div>
+      <div class="checkline">${checkLine}</div>
+      <div class="bars ${mins.length > 8 ? "many" : ""}">${mins.slice(-40).map((v) => `<div style="height:${Math.max(2, (v / max) * 100)}%" title="${fmt(v)} SOL"></div>`).join("")}</div>
+      <div class="muted small" style="margin-top:6px">outside volume per minute since launch</div>
+      ${detailsBlock(c, "b", `Bundle groups (${st.bundles.length})`, `<div class="list">${st.bundles.length ? st.bundles.map((b) => `<div><span>block</span><span class="mono">${b.slot} · ${b.wallets} wallets bought together</span><span>${fmt(b.sol)} SOL</span></div>`).join("") : `<div><span></span><span class="muted">None yet - 2+ wallets buying in the same block shows up here</span><span></span></div>`}</div>`)}
+      ${detailsBlock(c, "t", "Live trades", `<div class="list">${st.trades.length ? st.trades.map((t) => `<div><span class="muted">${clock(t.t)}</span><span class="mono">${t.wallet === c.wallet ? "you (dev)" : short(t.wallet)}</span><span class="${t.sol > 0 ? "pos" : "neg"}">${t.sol > 0 ? "buy" : "sell"} ${fmt(Math.abs(t.sol))}</span></div>`).join("") : `<div><span></span><span class="muted">No trades yet</span><span></span></div>`}</div>`)}`;
+  }
+  const logBlock = detailsBlock(c, "l", "Activity log", `<div class="list log">${c.log.map((l) => `<div><span class="muted">${clock(l.t)}</span><span>${esc(l.msg)}</span></div>`).join("")}</div>`);
+
+  const A = (action, label, cls = "") => `<button class="btn ${cls}" data-act="${action}" data-id="${c.id}">${label}</button>`;
+  const actions = live ? [
+    `<a class="btn" target="_blank" rel="noopener" href="https://pump.fun/coin/${c.mint}">pump.fun</a>`,
+    `<a class="btn" target="_blank" rel="noopener" href="https://axiom.trade/t/${c.mint}">Axiom</a>`,
+    `<button class="btn" data-copy="ca" data-id="${c.id}">Copy CA</button>`,
+    `<button class="btn" data-copy="post" data-id="${c.id}">Copy CA post</button>`,
+    st.devBagSol > 0 ? A("sell", "Sell dev bag", "lime") : "",
+    A("claim", "Claim fees", st.claimable > 0.001 ? "lime" : ""),
+    A("withdraw", "Withdraw SOL"),
+    !c.posted ? A("posted", "I posted it") : "",
+    c.stage === "checks" || c.stage === "earning" ? A("dud", "Mark dud", "red") : "",
+    A("exportKey", "Export key"),
+  ] : [
+    c.stage !== "launch" || c.launchAt > now ? A("launchNow", "Launch now", "lime") : "",
+    `<button class="btn" data-copy="wallet" data-id="${c.id}">Copy fresh wallet</button>`,
+    A("withdraw", "Withdraw SOL"),
+    A("exportKey", "Export key"),
+  ];
+  const top = c.stage === "stopped" ? (live ? A("resume", "Resume") : "") + A("remove", "Remove", "red")
+    : c.stage === "dud" || c.stage === "failed" ? A("stop", "Stop") + A("remove", "Remove", "red")
+    : A("stop", "Stop", "red");
+
+  return `
+  <div class="card">
+    <div class="coin-head">
+      <img src="/img/${esc(c.image)}" alt="">
+      <div style="flex:1; min-width:200px">
+        <div class="coin-title">${esc(c.name)} <span class="tk">$${esc(c.symbol)}</span></div>
+        <div class="sub"><span class="pill ${pc}">${pl}</span><span>#${c.number} · SOL pair · dev buy ${c.devBuySol} SOL${live ? ` · CA ${short(c.mint)}` : ""}</span></div>
+      </div>
+      <div class="row">${top}</div>
+    </div>
+    <div class="stages">${STAGES.map(([, label], i) => `<div class="stage ${stageClass(c, i)}"><i></i><span>${label}</span></div>`).join("")}</div>
+    ${body}
+    ${siteLine(c)}
+    <div class="actions">${actions.join("")}</div>
+    ${logBlock}
+  </div>`;
+}
+
+function render() {
+  if (!state) return;
+  const now = Date.now() + skew;
+  $("#mode").className = "mode " + (state.simulate ? "practice" : "live");
+  $("#mode").textContent = state.simulate ? "PRACTICE MODE - nothing real" : "LIVE - real SOL";
+  const w = [];
+  if (!state.pinata) w.push("Pinata key missing");
+  if (!state.x) w.push("X keys not set (posting is manual)");
+  if (!state.customRpc) w.push("using free public RPC");
+  if (state.site.enabled && !state.site.hostinger) w.push("Hostinger token missing (websites can't get a subdomain)");
+  $("#siteDomain").textContent = "." + state.site.domain;
+  document.querySelector(".sitebox").hidden = !state.site.enabled;
+  $("#logoutBtn").hidden = !state.public;
+  $("#warns").textContent = w.join(" · ");
+  $("#mainAddr").textContent = state.main.address;
+  $("#mainBal").textContent = state.simulate ? "practice" : fmt(state.main.sol);
+  if (document.activeElement !== $("#withdrawTo") && !$("#withdrawTo").dataset.touched) $("#withdrawTo").value = state.withdrawTo;
+  // live coins first, then upcoming launches soonest first, finished ones last
+  const rank = (c) => ({ checks: 0, post: 0, earning: 1, launch: 2, upload: 2, fund: 2, dud: 3, failed: 3, stopped: 4 })[c.stage] ?? 2;
+  const list = [...state.coins].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? a.launchAt - b.launchAt : b.createdAt - a.createdAt));
+  $("#coins").innerHTML = list.length ? list.map((c) => coinCard(c, now)).join("")
+    : `<div class="card empty">No coins yet.<br>Make the coin's website + X account, then press <b>+ New coin</b>.</div>`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/state");
+    if (r.status === 401) return void (location.href = "/login"); // logged out
+    state = await r.json();
+    skew = state.now - Date.now();
+    render();
+  } catch {
+    $("#mode").textContent = "Not connected - is the black AUTOPILOT window open?";
+  }
+}
+load();
+setInterval(load, 2000);
+setInterval(render, 1000);
+
+// details open/closed survives the refresh
+document.addEventListener("toggle", (e) => {
+  const id = e.target.dataset?.d;
+  if (id) e.target.open ? openDetails.add(id) : openDetails.delete(id);
+}, true);
+
+const CONFIRM = {
+  sell: "Sell the whole dev bag now?",
+  dud: "Mark as dud? If auto-sell is on, the dev bag is sold and SOL goes back to the main wallet.",
+  withdraw: "Send all SOL in this coin's fresh wallet back to the main wallet?",
+  stop: "Stop this coin? (Before launch: it won't launch. After launch: it stops watching.)",
+  remove: "Remove this coin from the list? (Its keys stay saved in data/keys.json.)",
+  launchNow: "Launch this coin right now?",
+};
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-act],[data-copy]");
+  if (!b) return;
+  const c = state?.coins.find((x) => x.id === b.dataset.id);
+  if (b.dataset.copy) {
+    if (b.dataset.copy === "main") return copy(state.main.address, "Main wallet address");
+    if (b.dataset.copy === "ca") return copy(c.mint, "CA");
+    if (b.dataset.copy === "post") return copy(c.postText, "Post text");
+    if (b.dataset.copy === "wallet") return copy(c.wallet, "Fresh wallet address");
+  }
+  const action = b.dataset.act;
+  if (CONFIRM[action] && !confirm(CONFIRM[action])) return;
+  if (action === "exportKey" && !confirm("Show this coin wallet's PRIVATE KEY? Only use it to import into your own Phantom. Anyone who sees it can take the funds.")) return;
+  b.disabled = true;
+  try {
+    const r = await post("/api/action", { id: b.dataset.id, action });
+    if (r.key) {
+      await navigator.clipboard.writeText(r.key);
+      toast("Private key copied - paste it into Phantom > Add wallet > Import private key");
+    } else toast("Done");
+    load();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    b.disabled = false;
+  }
+});
+
+// ---------- New coin form ----------
+const form = $("#form");
+function pad(n) { return String(n).padStart(2, "0"); }
+function defaultTime() {
+  const d = new Date(Date.now() + 30 * 60000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+$("#newBtn").onclick = () => { form.classList.add("open"); $("#whenAt").value ||= defaultTime(); form.scrollIntoView({ behavior: "smooth" }); };
+$("#cancelBtn").onclick = () => form.classList.remove("open");
+// website fields: subdomain follows the ticker, color is picked from the logo
+const ticker = form.elements.symbol;
+ticker.addEventListener("input", () => { if (!$("#sub").dataset.touched) $("#sub").value = ticker.value.toLowerCase().replace(/[^a-z0-9-]/g, ""); });
+$("#sub").addEventListener("input", () => ($("#sub").dataset.touched = "1"));
+$("#makeSite").onchange = () => { $("#siteFields").style.display = $("#makeSite").checked ? "" : "none"; };
+form.elements.image.addEventListener("change", () => {
+  const file = form.elements.image.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 40;
+    const g = cv.getContext("2d");
+    g.drawImage(img, 0, 0, 40, 40);
+    const d = g.getImageData(0, 0, 40, 40).data;
+    // the most colorful bright pixels win, so dark backgrounds and white outlines are ignored
+    let best = null, bestScore = -1;
+    const buckets = {};
+    for (let i = 0; i < d.length; i += 4) {
+      const [r, gg, b] = [d[i], d[i + 1], d[i + 2]];
+      const max = Math.max(r, gg, b), min = Math.min(r, gg, b);
+      if (d[i + 3] < 128 || max < 70 || max - min < 50) continue;
+      const key = `${r >> 5},${gg >> 5},${b >> 5}`;
+      const k = (buckets[key] ??= { n: 0, r: 0, g: 0, b: 0 });
+      k.n++; k.r += r; k.g += gg; k.b += b;
+      const score = k.n * (max - min);
+      if (score > bestScore) { bestScore = score; best = k; }
+    }
+    if (best) $("#accent").value = "#" + [best.r, best.g, best.b].map((v) => Math.round(v / best.n).toString(16).padStart(2, "0")).join("");
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+});
+$("#when").onchange =() => { $("#whenAt").style.visibility = $("#when").value === "at" ? "visible" : "hidden"; };
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  $("#formErr").textContent = "";
+  const fd = new FormData(form);
+  if ($("#when").value === "now") fd.set("launchAt", "now");
+  else {
+    const t = new Date($("#whenAt").value).getTime();
+    if (!t) return ($("#formErr").textContent = "Pick a launch time.");
+    fd.set("launchAt", String(t));
+  }
+  $("#addBtn").disabled = true;
+  try {
+    const r = await fetch("/api/coins", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    form.reset();
+    delete $("#sub").dataset.touched;
+    form.classList.remove("open");
+    toast(`${j.name} added to autopilot`);
+    load();
+  } catch (err) {
+    $("#formErr").textContent = err.message;
+  } finally {
+    $("#addBtn").disabled = false;
+  }
+};
+
+// ---------- Backup / restore / log out ----------
+$("#backupBtn").onclick = (e) => {
+  if (!confirm("The backup file holds the PRIVATE KEYS of every wallet. Keep it safe and never send it to anyone. Download it?")) e.preventDefault();
+};
+$("#restoreFile").onchange = async () => {
+  const f = $("#restoreFile").files[0];
+  $("#restoreFile").value = "";
+  if (!f || !confirm(`Restore ${f.name}? This replaces this AUTOPILOT's (empty) main wallet with the one in the backup.`)) return;
+  try {
+    await post("/api/restore", JSON.parse(await f.text()));
+    toast("Restored - restarting, the page reloads in 15 seconds");
+    setTimeout(() => location.reload(), 15000);
+  } catch (err) { toast(err.message); }
+};
+$("#logoutBtn").onclick = async () => {
+  await post("/api/logout", {}).catch(() => {});
+  location.href = "/login";
+};
+
+// ---------- Main wallet ----------
+$("#withdrawTo").oninput = () => ($("#withdrawTo").dataset.touched = "1");
+$("#saveTo").onclick = async () => {
+  try {
+    await post("/api/settings", { withdrawTo: $("#withdrawTo").value });
+    delete $("#withdrawTo").dataset.touched;
+    toast("Saved");
+  } catch (err) { toast(err.message); }
+};
+$("#withdrawMain").onclick = async () => {
+  if (!confirm(`Send ALL SOL in the main wallet to ${state.withdrawTo || "(not saved)"}?`)) return;
+  try {
+    const r = await post("/api/withdraw-main", {});
+    toast(`Sent ${fmt(r.sent, 4)} SOL`);
+    load();
+  } catch (err) { toast(err.message); }
+};
+</script>
+</body>
+</html>
