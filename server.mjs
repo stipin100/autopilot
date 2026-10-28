@@ -907,8 +907,17 @@ async function login(req, res, password) {
   json(res, 200, { ok: true });
 }
 
-const LOGIN_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AUTOPILOT</title><style>
+const APP_FILES = {
+  "/apple-touch-icon.png": ["apple-touch-icon.png", "image/png"],
+  "/icon-512.png": ["icon-512.png", "image/png"],
+  "/manifest.webmanifest": ["manifest.webmanifest", "application/manifest+json"],
+};
+const APP_TAGS = `<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" href="/icon-512.png"><link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="AUTOPILOT">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#0b0f17">`;
+
+const LOGIN_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AUTOPILOT</title>${APP_TAGS}<style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f17;color:#e8ecf3;font:15px system-ui,sans-serif}
 form{width:min(340px,calc(100vw - 32px));background:#121825;border:1px solid #1f2737;border-radius:18px;padding:26px}
 h1{margin:0 0 18px;font-size:22px}h1 span{color:#d5f26c}
@@ -950,6 +959,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (PUBLIC) res.setHeader("X-Frame-Options", "DENY");
   try {
+    // App icon + manifest are public (the phone fetches them when you add AUTOPILOT to the home screen)
+    if (req.method === "GET" && APP_FILES[url.pathname]) {
+      const [name, type] = APP_FILES[url.pathname];
+      res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=86400" });
+      return fs.createReadStream(path.join(ROOT, "public", name)).pipe(res);
+    }
     if (PUBLIC && !loggedIn(req)) {
       if (req.method === "GET" && url.pathname === "/login") {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });

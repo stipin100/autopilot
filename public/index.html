@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AUTOPILOT</title>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/icon-512.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AUTOPILOT">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0f17">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -14,7 +22,7 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; }
-  .wrap { max-width: 1220px; margin: 0 auto; padding: 22px 16px 80px; }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: calc(22px + env(safe-area-inset-top)) 16px 80px; }
   header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
   .logo { font-weight: 800; font-size: 22px; letter-spacing: .5px; }
   .logo span { color: var(--lime); }
