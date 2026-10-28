@@ -890,7 +890,8 @@ function loggedIn(req) {
   return timingSafeEqual(sign(m[1]), Buffer.from(m[2], "hex"));
 }
 
-async function login(req, res, password) {
+/** Checks the password with the same 5-tries lockout as the login page. */
+async function checkPassword(req, password) {
   const ip = clientIp(req);
   const f = failedLogins.get(ip) ?? { n: 0, until: 0 };
   if (f.until > Date.now()) throw new UserError(`Too many wrong tries. Wait ${Math.ceil((f.until - Date.now()) / 60_000)} minutes.`);
@@ -902,6 +903,10 @@ async function login(req, res, password) {
     throw new UserError("Wrong password.");
   }
   failedLogins.delete(ip);
+}
+
+async function login(req, res, password) {
+  await checkPassword(req, password);
   const exp = String(Date.now() + SESSION_MS);
   res.setHeader("Set-Cookie", `ap=${exp}.${sign(exp).toString("hex")}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MS / 1000}`);
   json(res, 200, { ok: true });
@@ -1025,6 +1030,10 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === "/api/logout") {
         res.setHeader("Set-Cookie", "ap=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
         return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/api/export-main") {
+        if (PUBLIC) await checkPassword(req, body.password); // asked again even when logged in
+        return json(res, 200, { key: bs58.encode(mainWallet.secretKey) });
       }
       if (url.pathname === "/api/restore") {
         await restore(body);

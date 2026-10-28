@@ -136,6 +136,7 @@
         <button class="btn" id="withdrawMain">Withdraw all</button>
       </div>
       <div class="row" style="margin-top:10px">
+        <button class="btn" id="exportMain">Export main key</button>
         <a class="btn" id="backupBtn" href="/api/backup">Download backup</a>
         <label class="btn" style="margin:0">Restore backup<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
         <button class="btn red" id="logoutBtn" hidden>Log out</button>
@@ -497,6 +498,19 @@ $("#restoreFile").onchange = async () => {
     await post("/api/restore", JSON.parse(await f.text()));
     toast("Restored - restarting, the page reloads in 15 seconds");
     setTimeout(() => location.reload(), 15000);
+  } catch (err) { toast(err.message); }
+};
+$("#exportMain").onclick = async () => {
+  if (!confirm("Copy the MAIN WALLET's PRIVATE KEY? Only paste it into your own Phantom. Anyone who sees it can take all the SOL.")) return;
+  let password = "";
+  if (state.public) {
+    password = prompt("Type your AUTOPILOT password again:");
+    if (!password) return;
+  }
+  try {
+    const r = await post("/api/export-main", { password });
+    await navigator.clipboard.writeText(r.key).catch(() => prompt("Copy your private key:", r.key));
+    toast("Private key copied - Phantom > Add wallet > Import private key");
   } catch (err) { toast(err.message); }
 };
 $("#logoutBtn").onclick = async () => {
