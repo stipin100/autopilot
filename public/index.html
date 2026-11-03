@@ -164,6 +164,12 @@
           <div class="full"><label>Story for the website (2-3 sentences, leave empty to use the description)</label><textarea name="story" maxlength="600"></textarea></div>
         </div>
       </div>
+      <div>
+        <label>Pair (what people buy it with)</label>
+        <input id="pairSearch" placeholder="Search: PUMP, NVDA, USDC..." style="margin-bottom:6px">
+        <select name="quote" id="pairSelect"><option value="So11111111111111111111111111111111111111112">SOL</option></select>
+        <div class="muted small" id="pairNote" style="margin-top:4px"></div>
+      </div>
       <div><label>Dev buy (SOL)</label><input name="devBuySol" type="number" step="0.01" min="0" max="20" value="0.9"></div>
       <div>
         <label>Launch time</label>
@@ -225,17 +231,25 @@ function dur(ms) {
 const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const short = (a) => a ? `${a.slice(0, 4)}...${a.slice(-4)}` : "";
 
-const STAGES = [["fund", "Fund wallet"], ["upload", "Upload"], ["launch", "Launch"], ["post", "Post on X"], ["checks", "Checks"], ["earning", "Earning"]];
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const isPair = (c) => c.quote && c.quote.mint !== SOL_MINT;
+// a pair coin gets the extra "Buy pair" stage after funding
+function stagesFor(c) {
+  const s = [["fund", "Fund wallet"], ["upload", "Upload"], ["launch", "Launch"], ["post", "Post on X"], ["checks", "Checks"], ["earning", "Earning"]];
+  if (isPair(c)) s.splice(1, 0, ["pair", `Buy ${c.quote.symbol}`]);
+  return s;
+}
 function stageClass(c, i) {
-  const at = { fund: 0, upload: 1, launch: 2, post: 3, checks: 4, earning: 5, dud: 4, failed: 2 }[c.stage] ?? (c.mint ? 4 : 0);
+  const keys = stagesFor(c).map(([k]) => k);
+  const at = { dud: keys.indexOf("checks"), failed: keys.indexOf("launch") }[c.stage] ?? (keys.includes(c.stage) ? keys.indexOf(c.stage) : c.mint ? keys.indexOf("checks") : 0);
   if (c.stage === "stopped") return i < at ? "done" : "todo";
-  if (i === 3 && i < at && !c.posted) return "skip";
+  if (keys[i] === "post" && i < at && !c.posted) return "skip";
   if (i < at) return "done";
   if (i === at) return c.stage === "dud" || c.stage === "failed" ? "bad" : c.stage === "earning" ? "done" : "now";
   return "todo";
 }
 const PILL = {
-  fund: ["sched", "Scheduled"], upload: ["sched", "Uploading"], launch: ["sched", "Ready"], post: ["live", "Live - posting"],
+  fund: ["sched", "Scheduled"], pair: ["sched", "Buying pair"], upload: ["sched", "Uploading"], launch: ["sched", "Ready"], post: ["live", "Live - posting"],
   checks: ["live", "Live - checking"], earning: ["earn", "Earning"], dud: ["dud", "Dud"], failed: ["fail", "Launch failed"], stopped: ["stop", "Stopped"],
 };
 
@@ -322,11 +336,11 @@ function coinCard(c, now) {
       <img src="/img/${esc(c.image)}" alt="">
       <div style="flex:1; min-width:200px">
         <div class="coin-title">${esc(c.name)} <span class="tk">$${esc(c.symbol)}</span></div>
-        <div class="sub"><span class="pill ${pc}">${pl}</span><span>#${c.number} · SOL pair · dev buy ${c.devBuySol} SOL${live ? ` · CA ${short(c.mint)}` : ""}</span></div>
+        <div class="sub"><span class="pill ${pc}">${pl}</span><span>#${c.number} · ${isPair(c) ? `<b style="color:var(--lime)">${esc(c.quote.symbol)} pair</b>` : "SOL pair"} · dev buy ${c.devBuySol} SOL${live ? ` · CA ${short(c.mint)}` : ""}</span></div>
       </div>
       <div class="row">${top}</div>
     </div>
-    <div class="stages">${STAGES.map(([, label], i) => `<div class="stage ${stageClass(c, i)}"><i></i><span>${label}</span></div>`).join("")}</div>
+    <div class="stages" style="grid-template-columns:repeat(${stagesFor(c).length},1fr)">${stagesFor(c).map(([, label], i) => `<div class="stage ${stageClass(c, i)}"><i></i><span>${label}</span></div>`).join("")}</div>
     ${body}
     ${siteLine(c)}
     <div class="actions">${actions.join("")}</div>
@@ -458,6 +472,29 @@ form.elements.image.addEventListener("change", () => {
   };
   img.src = URL.createObjectURL(file);
 });
+// ---------- Pair picker: every token Pump.fun accepts, searchable ----------
+let pairs = [];
+function showPairs() {
+  const q = $("#pairSearch").value.trim().toLowerCase();
+  const keep = $("#pairSelect").value;
+  const list = pairs.filter((p) => !q || p.symbol.toLowerCase().includes(q) || p.mint.toLowerCase() === q);
+  $("#pairSelect").innerHTML = list.map((p) => `<option value="${p.mint}">${esc(p.symbol)}${p.mint === SOL_MINT ? " (normal)" : ""}</option>`).join("");
+  if (list.some((p) => p.mint === keep)) $("#pairSelect").value = keep;
+  pairNote();
+}
+function pairNote() {
+  const p = pairs.find((x) => x.mint === $("#pairSelect").value);
+  $("#pairNote").textContent = !p || p.mint === SOL_MINT ? "" : `Your dev buy is swapped into ${p.symbol} first, and sales are swapped back to SOL (small swap fees). Funding adds 0.02 SOL.`;
+}
+$("#pairSearch").oninput = showPairs;
+$("#pairSelect").onchange = pairNote;
+$("#newBtn").addEventListener("click", async () => {
+  if (pairs.length) return;
+  try {
+    pairs = await (await fetch("/api/pairs")).json();
+    showPairs();
+  } catch { $("#pairNote").textContent = "Couldn't load the pair list - SOL only for now."; }
+});
 $("#when").onchange =() => { $("#whenAt").style.visibility = $("#when").value === "at" ? "visible" : "hidden"; };
 form.onsubmit = async (e) => {
   e.preventDefault();
@@ -475,6 +512,8 @@ form.onsubmit = async (e) => {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     form.reset();
+    $("#pairSearch").value = "";
+    if (pairs.length) showPairs();
     delete $("#sub").dataset.touched;
     form.classList.remove("open");
     toast(`${j.name} added to autopilot`);

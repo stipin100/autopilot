@@ -21,6 +21,7 @@ import {
   OnlinePumpSdk, PUMP_SDK, bondingCurvePda, getBuyTokenAmountFromSolAmount, getSellSolAmountFromTokenAmount,
 } from "@pump-fun/pump-sdk";
 import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs";
+import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
 
 const PORT = Number(process.env.PORT || 3480);
 const SIMULATE = process.env.SIMULATE !== "0"; // practice mode until you set SIMULATE=0 in .env
@@ -49,6 +50,7 @@ const SOL = LAMPORTS_PER_SOL;
 const TOKEN_DECIMALS = 6;
 const FUND_LEAD_MS = 10 * 60_000; // fresh wallet gets its SOL 10 minutes before launch
 const FUND_EXTRA_SOL = 0.03; // on top of the dev buy: launch cost (~0.006), priority fees, sell + claim fees
+const FUND_PAIR_EXTRA_SOL = 0.02; // pair coins: 2 swaps + the pair token's account rent
 const PRIORITY = { launch: 1_000_000, normal: 200_000 }; // micro-lamports per compute unit
 const COIN_RESERVE_LAMPORTS = 3_000_000; // 0.003 SOL stays in each coin wallet so it can keep paying to claim creator fees
 
@@ -354,11 +356,36 @@ async function getTransactions(sigs) {
   return out;
 }
 
+// ---------- Pair coins (quoted in $PUMP, NVDAx, USDC... instead of SOL) ----------
+// Everything is still shown in SOL: pair amounts are converted at the live Jupiter price.
+
+const quoteKey = (c) => new PublicKey(c.quote.mint);
+async function quoteProgram(c) {
+  c.quote.tokenProgram ??= (await online.fetchQuoteTokenProgram(quoteKey(c))).toBase58();
+  return new PublicKey(c.quote.tokenProgram);
+}
+async function quoteBalance(c) {
+  const ata = getAssociatedTokenAddressSync(quoteKey(c), new PublicKey(c.wallet), false, await quoteProgram(c));
+  return rpc.getTokenAccountBalance(ata).then((r) => new BN(r.value.amount)).catch(() => new BN(0));
+}
+const quoteUi = (c, raw) => Number(raw.toString()) / 10 ** c.quote.decimals;
+const quoteInSol = async (c, raw) => quoteUi(c, raw) * (await priceInSol(c.quote.mint, c.quote.decimals));
+
+/** Swaps everything the coin wallet holds of the pair token back to SOL (dust is left). Returns SOL gained. */
+async function pairToSol(c) {
+  const bal = await quoteBalance(c);
+  if (bal.isZero() || (await quoteInSol(c, bal)) < 0.0005) return 0;
+  const before = await balanceOf(c.wallet);
+  await swap(keypair(c.id), c.quote.mint, SOL_MINT, bal.toString(), sendAndConfirm);
+  return ((await balanceOf(c.wallet)) - before) / SOL;
+}
+
 /** Reads every new trade on the coin's bonding curve straight from Solana (no third-party API). */
 async function scanTrades(c) {
   const curve = bondingCurvePda(c.mint);
   const sigs = await rpc.getSignaturesForAddress(curve, { until: c.stats.lastSig ?? undefined, limit: 200 });
   const fresh = sigs.filter((s) => !s.err).reverse(); // oldest first
+  const pairPrice = isPair(c) && fresh.length ? await priceInSol(c.quote.mint, c.quote.decimals) : 1;
   for (let i = 0; i < fresh.length; i += 25) {
     const chunk = fresh.slice(i, i + 25);
     const txs = await getTransactions(chunk.map((s) => s.signature));
@@ -367,7 +394,14 @@ async function scanTrades(c) {
       const keysList = tx.transaction.message.accountKeys.map((k) => k.pubkey);
       const idx = keysList.indexOf(curve.toBase58());
       if (idx < 0) return;
-      const sol = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / SOL; // + = someone bought
+      let sol; // + = someone bought
+      if (isPair(c)) {
+        // the curve's pair-token balance moves instead of its SOL
+        const bal = (list) => Number(list?.find((b) => b.owner === curve.toBase58() && b.mint === c.quote.mint)?.uiTokenAmount.amount ?? 0);
+        sol = ((bal(tx.meta.postTokenBalances) - bal(tx.meta.preTokenBalances)) / 10 ** c.quote.decimals) * pairPrice;
+      } else {
+        sol = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / SOL;
+      }
       if (Math.abs(sol) < 1e-6 || chunk[j].signature === c.sig) return; // skip the launch itself
       addTrade(c, { wallet: keysList[0], sol: +sol.toFixed(4), slot: tx.slot, t: (tx.blockTime ?? Date.now() / 1000) * 1000, sig: chunk[j].signature });
     });
@@ -385,12 +419,13 @@ async function refreshMoney(c) {
     st.walletSol = c.simWalletSol ?? 0;
   } else {
     const wallet = new PublicKey(c.wallet);
-    const [walletLamports, claimable, bag] = await Promise.all([
+    const [walletLamports, claimable, bag, leftover] = await Promise.all([
       balanceOf(wallet),
-      online.getCreatorVaultBalanceBothPrograms(wallet).then((b) => b.toNumber() / SOL).catch(() => st.claimable),
+      claimableSol(c, wallet).catch(() => st.claimable),
       devBag(c).catch(() => null),
+      isPair(c) ? quoteBalance(c).then((b) => quoteInSol(c, b)).catch(() => 0) : 0, // pair tokens not swapped back yet
     ]);
-    st.walletSol = walletLamports / SOL;
+    st.walletSol = walletLamports / SOL + leftover;
     st.claimable = claimable;
     if (bag) {
       st.devTokens = bag.tokens;
@@ -400,6 +435,18 @@ async function refreshMoney(c) {
   }
   if (c.devBuySol > 0 && st.devBagSol > 0) st.peakX = Math.max(st.peakX, +(st.devBagSol / c.devBuySol).toFixed(3));
   st.profit = +(st.walletSol + st.devBagSol + st.claimable + c.withdrawnSol - c.fundedSol).toFixed(4);
+}
+
+/** Creator fees waiting to be claimed, in SOL (a pair coin's fees arrive in the pair token). */
+async function claimableSol(c, wallet) {
+  if (!isPair(c)) return (await online.getCreatorVaultBalanceBothPrograms(wallet)).toNumber() / SOL;
+  let sol = 0;
+  for (const b of await online.getCreatorVaultQuoteBalances(wallet, [quoteKey(c)])) {
+    if (b.total.isZero()) continue;
+    if (b.mint.toBase58() === SOL_MINT) sol += b.total.toNumber() / SOL;
+    else if (b.mint.toBase58() === c.quote.mint) sol += await quoteInSol(c, b.total);
+  }
+  return sol;
 }
 
 async function devBag(c) {
@@ -414,8 +461,9 @@ async function devBag(c) {
   if (!info || bal.isZero()) return { tokens: 0, sol: 0, graduated: false };
   const curve = PUMP_SDK.decodeBondingCurve(info);
   if (curve.complete) return { tokens: bal.toNumber() / 10 ** TOKEN_DECIMALS, sol: c.stats.devBagSol, graduated: true };
-  const sol = getSellSolAmountFromTokenAmount({ global: chain.global, feeConfig: chain.feeConfig, mintSupply: curve.tokenTotalSupply, bondingCurve: curve, amount: bal });
-  return { tokens: bal.toNumber() / 10 ** TOKEN_DECIMALS, sol: sol.toNumber() / SOL, graduated: false };
+  const out = getSellSolAmountFromTokenAmount({ global: chain.global, feeConfig: chain.feeConfig, mintSupply: curve.tokenTotalSupply, bondingCurve: curve, amount: bal });
+  const sol = isPair(c) ? await quoteInSol(c, out) : out.toNumber() / SOL; // a pair coin sells into the pair token
+  return { tokens: bal.toNumber() / 10 ** TOKEN_DECIMALS, sol, graduated: false };
 }
 
 // ---------- Actions (buttons + automatic steps) ----------
@@ -437,8 +485,23 @@ async function sellDevBag(c) {
   const balance = await rpc.getTokenAccountBalance(ata).then((r) => new BN(r.value.amount)).catch(() => new BN(0));
   if (balance.isZero()) throw new UserError("The dev wallet holds no tokens.");
   const before = await balanceOf(wallet.publicKey);
-  const [state, chain] = await Promise.all([online.fetchSellState(mint, wallet.publicKey, tokenProgram), chainData()]);
-  if (state.bondingCurve.complete) {
+  const [state, chain] = await Promise.all([online.fetchSellState(mint, wallet.publicKey, tokenProgram, isPair(c) ? quoteKey(c) : undefined), chainData()]);
+  if (isPair(c)) {
+    if (state.bondingCurve.complete) {
+      await swap(wallet, c.mint, SOL_MINT, balance.toString(), sendAndConfirm); // graduated: Jupiter routes it straight to SOL
+    } else {
+      const quoteAmount = getSellSolAmountFromTokenAmount({
+        global: chain.global, feeConfig: chain.feeConfig, mintSupply: state.bondingCurve.tokenTotalSupply, bondingCurve: state.bondingCurve, amount: balance,
+      });
+      const ixs = await PUMP_SDK.sellV2Instructions({
+        global: chain.global, bondingCurveAccountInfo: state.bondingCurveAccountInfo, bondingCurve: state.bondingCurve, mint, user: wallet.publicKey,
+        amount: balance, quoteAmount, slippage: 30, tokenProgram, quoteTokenProgram: state.quoteTokenProgram,
+      });
+      ixs.push(createCloseAccountInstruction(ata, wallet.publicKey, wallet.publicKey, [], tokenProgram));
+      await sendIxs([wallet], ixs, 260_000);
+      await pairToSol(c); // the sale paid out in the pair token: back to SOL
+    }
+  } else if (state.bondingCurve.complete) {
     await pumpPortalSell(c, wallet);
   } else {
     const solAmount = getSellSolAmountFromTokenAmount({
@@ -475,8 +538,15 @@ async function claimFees(c) {
   }
   const wallet = keypair(c.id);
   const before = await balanceOf(wallet.publicKey);
-  const ixs = await online.collectCoinCreatorFeeInstructions(wallet.publicKey, wallet.publicKey);
-  await sendIxs([wallet], ixs, 120_000);
+  if (isPair(c)) {
+    // fees sit in the pair token: claim every quote, then swap the pair token back to SOL
+    const ixs = await online.collectCoinCreatorFeeAllQuotesInstructions(wallet.publicKey, wallet.publicKey, [quoteKey(c)]);
+    await sendIxs([wallet], ixs, 300_000);
+    await pairToSol(c);
+  } else {
+    const ixs = await online.collectCoinCreatorFeeInstructions(wallet.publicKey, wallet.publicKey);
+    await sendIxs([wallet], ixs, 120_000);
+  }
   const got = ((await balanceOf(wallet.publicKey)) - before) / SOL;
   c.stats.feesClaimed = +(c.stats.feesClaimed + Math.max(0, got)).toFixed(4);
   return got;
@@ -494,6 +564,7 @@ async function withdrawCoin(c) {
     c.withdrawnSol = +(c.withdrawnSol + got).toFixed(4);
     return got;
   }
+  if (isPair(c)) await pairToSol(c).catch((e) => log(c, `Couldn't swap leftover ${c.quote.symbol} to SOL: ${e.message}`));
   const got = await transferAll(keypair(c.id), mainWallet.publicKey, keep);
   c.withdrawnSol = +(c.withdrawnSol + got).toFixed(4);
   return got;
@@ -518,14 +589,31 @@ async function launch(c) {
   const { global, feeConfig } = await chainData();
   const user = wallet.publicKey;
   let ixs;
-  if (c.devBuySol > 0) {
+  let units = c.devBuySol > 0 ? 230_000 : 125_000;
+  if (isPair(c)) {
+    // paired coin: the dev buy is paid with the pair token bought in the "Buy pair" step
+    const quoteMint = quoteKey(c);
+    const quoteTokenProgram = await quoteProgram(c);
+    const base = { mint: mintKp.publicKey, name: c.name, symbol: c.symbol, uri: c.uri, creator: user, user, mayhemMode: false, quoteMint, quoteTokenProgram };
+    const held = c.devBuySol > 0 ? await quoteBalance(c) : new BN(0);
+    if (held.isZero()) {
+      ixs = [await PUMP_SDK.createV2Instruction(base)];
+      units = 250_000;
+    } else {
+      const quoteAmount = held.muln(97).divn(100); // the buy may cost up to 2% more; keep 3% room
+      const quoteControl = await online.fetchQuoteControl();
+      const amount = getBuyTokenAmountFromSolAmount({ global, feeConfig, mintSupply: null, bondingCurve: null, amount: quoteAmount, quoteMint, quoteControl });
+      ixs = await PUMP_SDK.createV2AndBuyV2Instructions({ global, ...base, amount, quoteAmount, slippage: 2 });
+      units = 450_000; // measured ~350k on mainnet for $PUMP / NVDAx pairs
+    }
+  } else if (c.devBuySol > 0) {
     const solAmount = new BN(Math.round(c.devBuySol * SOL));
     const amount = getBuyTokenAmountFromSolAmount({ global, feeConfig, mintSupply: null, bondingCurve: null, amount: solAmount, quoteMint: NATIVE_MINT });
     ixs = await PUMP_SDK.createV2AndBuyInstructions({ global, mint: mintKp.publicKey, name: c.name, symbol: c.symbol, uri: c.uri, creator: user, user, amount, solAmount, mayhemMode: false });
   } else {
     ixs = [await PUMP_SDK.createV2Instruction({ mint: mintKp.publicKey, name: c.name, symbol: c.symbol, uri: c.uri, creator: user, user, mayhemMode: false })];
   }
-  const tx = await buildTx(user, ixs, c.devBuySol > 0 ? 230_000 : 125_000, PRIORITY.launch);
+  const tx = await buildTx(user, ixs, units, PRIORITY.launch);
   const sim = await rpc.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true });
   if (sim.value.err) throw new Error(`launch would fail: ${JSON.stringify(sim.value.err)} ${(sim.value.logs ?? []).slice(-2).join(" ")}`);
   tx.sign([wallet, mintKp]);
@@ -536,7 +624,8 @@ async function launch(c) {
 }
 
 // ---------- The autopilot ----------
-// Stages: fund -> upload -> launch -> post -> checks -> earning   (or dud / stopped / failed)
+// Stages: fund -> (pair) -> upload -> launch -> post -> checks -> earning   (or dud / stopped / failed)
+// "pair" (Buy pair) only runs for coins paired with a token other than SOL.
 
 const newStats = () => ({
   outsideWallets: 0, outsideVolume: 0, feesClaimed: 0, claimable: 0, devBagSol: 0, devTokens: 0, peakX: 0, profit: 0,
@@ -548,18 +637,19 @@ async function step(c) {
   switch (c.stage) {
     case "fund": {
       if (now < c.launchAt - FUND_LEAD_MS) return void (c.status = "Scheduled");
-      const need = c.devBuySol + FUND_EXTRA_SOL;
+      const need = c.devBuySol + FUND_EXTRA_SOL + (isPair(c) ? FUND_PAIR_EXTRA_SOL : 0);
+      const next = isPair(c) ? "pair" : "upload";
       if (SIMULATE) {
         c.fundedSol = need;
         log(c, `Practice: fresh wallet funded with ${need.toFixed(3)} SOL`);
-        c.stage = "upload";
+        c.stage = next;
         return;
       }
       const have = (await balanceOf(c.wallet)) / SOL;
       if (have >= need - 0.0005) {
         c.fundedSol = Math.max(c.fundedSol, have);
         log(c, `Fresh wallet has ${have.toFixed(3)} SOL - ready`);
-        c.stage = "upload";
+        c.stage = next;
         return;
       }
       const missing = need - have + 0.0005;
@@ -571,6 +661,29 @@ async function step(c) {
       await sendIxs([mainWallet], [SystemProgram.transfer({ fromPubkey: mainWallet.publicKey, toPubkey: new PublicKey(c.wallet), lamports: Math.ceil(missing * SOL) })], 1000);
       c.fundedSol += missing;
       log(c, `Sent ${missing.toFixed(3)} SOL from main wallet to the fresh wallet`);
+      return;
+    }
+    case "pair": {
+      // Buy pair: swap the dev buy's SOL into the pair token, so the coin can be launched and bought with it.
+      if (SIMULATE || c.devBuySol === 0) {
+        if (SIMULATE) log(c, `Practice: bought ${c.quote.symbol} with ${c.devBuySol} SOL`);
+        c.stage = "upload";
+        return;
+      }
+      let held = await quoteBalance(c);
+      if (held.isZero()) {
+        // only swap while the wallet holds none, and give a slow swap 90s to land before trying again
+        if (now - (c.pairSwapAt ?? 0) < 90_000) return void (c.status = `Waiting for the ${c.quote.symbol} buy to land`);
+        c.pairSwapAt = now;
+        c.status = `Buying ${c.quote.symbol}...`;
+        await swap(keypair(c.id), SOL_MINT, c.quote.mint, Math.round(c.devBuySol * SOL), sendAndConfirm).catch((e) => {
+          if (!/not confirmed in time/.test(e.message)) throw e;
+        });
+        held = await quoteBalance(c);
+        if (held.isZero()) return void (c.status = `Waiting for the ${c.quote.symbol} buy to land`);
+      }
+      log(c, `Bought ${quoteUi(c, held).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${c.quote.symbol} for ${c.devBuySol} SOL`);
+      c.stage = "upload";
       return;
     }
     case "upload": {
@@ -762,6 +875,16 @@ async function addCoin(form) {
     accent: str("accent"),
   };
   if (c.makeSite && !siteConfig.enabled) throw new UserError("The website maker only works on your PC.");
+  const quoteMint = str("quote") || SOL_MINT;
+  if (quoteMint !== SOL_MINT) {
+    const pair = (await pairList(online, RPC_URL)).find((p) => p.mint === quoteMint);
+    if (!pair) throw new UserError("Pump.fun doesn't accept that pair token.");
+    let decimals = pair.decimals;
+    if (!Number.isInteger(decimals)) decimals = (await rpc.getParsedAccountInfo(new PublicKey(quoteMint))).value?.data?.parsed?.info?.decimals;
+    if (!Number.isInteger(decimals)) throw new UserError("Couldn't read that pair token - try again.");
+    if (!SIMULATE) await priceInSol(quoteMint, decimals).catch(() => { throw new UserError(`No swap route for ${pair.symbol} right now - pick another pair.`); });
+    c.quote = { mint: quoteMint, symbol: pair.symbol, decimals };
+  }
   if (c.makeSite) {
     if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(c.sub)) throw new UserError("Subdomain can only use letters, numbers and dashes.");
     if (coins.some((x) => x.sub === c.sub && x.makeSite)) throw new UserError(`${c.sub}.${siteConfig.domain} is already used by another coin.`);
@@ -1009,6 +1132,9 @@ const server = http.createServer(async (req, res) => {
       if (!c?.makeSite || !fs.existsSync(bannerPath(c))) return json(res, 404, { error: "No banner yet" });
       res.writeHead(200, { "Content-Type": "image/png", "Content-Disposition": `attachment; filename="${c.sub}-banner.png"` });
       return fs.createReadStream(bannerPath(c)).pipe(res);
+    }
+    if (req.method === "GET" && url.pathname === "/api/pairs") {
+      return json(res, 200, (await pairList(online, RPC_URL)).map(({ mint, symbol }) => ({ mint, symbol })));
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
       return json(res, 200, {
