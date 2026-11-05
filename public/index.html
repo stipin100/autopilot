@@ -11,87 +11,177 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="AUTOPILOT">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0b0f17">
+<meta name="theme-color" content="#07090d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0b0f17; --card: #121825; --tile: #0e1420; --line: #1f2737; --line2: #2a3242;
-    --text: #e8ecf3; --muted: #8a93a6; --dim: #5b6477;
-    --green: #5fdc8a; --lime: #d5f26c; --blue: #5b93f0; --red: #f06b6b; --amber: #f2b45b;
+    --bg: #07090d; --panel: #0d1117; --panel2: #11161e; --tile: #0a0e14; --line: #1a212c; --line2: #252e3b;
+    --text: #e9edf3; --muted: #8b94a5; --dim: #586172;
+    --lime: #d5f26c; --limeDim: #2b3412; --green: #5fdc8a; --blue: #6fa3ff; --red: #f26d6d; --amber: #f2b45b; --violet: #b49cff;
+    --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
   }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; }
-  .wrap { max-width: 1220px; margin: 0 auto; padding: calc(22px + env(safe-area-inset-top)) 16px 80px; }
-  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
-  .logo { font-weight: 800; font-size: 22px; letter-spacing: .5px; }
-  .logo span { color: var(--lime); }
-  .mode { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .mode.practice { background: #2a2410; color: var(--amber); border: 1px solid #5a4818; }
-  .mode.live { background: #102a18; color: var(--green); border: 1px solid #1d5a32; }
-  .warn { font-size: 12px; color: var(--amber); }
-  .spacer { flex: 1; }
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background:
+    radial-gradient(900px 500px at 85% -10%, rgba(213,242,108,.07), transparent 60%),
+    radial-gradient(700px 500px at -10% 110%, rgba(111,163,255,.05), transparent 60%); }
+  a { color: var(--lime); }
 
-  .card { background: linear-gradient(180deg, #131a28, #10151f); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
-  .btn { background: #161d2b; color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 13px; font: 600 13px Inter, sans-serif; cursor: pointer; white-space: nowrap; }
-  .btn:hover { background: #1c2536; }
+  /* ---------- layout ---------- */
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; position: relative; }
+  nav.side { position: sticky; top: 0; height: 100vh; padding: calc(22px + env(safe-area-inset-top)) 14px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; background: rgba(7,9,13,.7); backdrop-filter: blur(10px); }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; font-weight: 800; font-size: 18px; letter-spacing: .6px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .brand span { color: var(--lime); }
+  .navbtn { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; color: var(--muted); font-weight: 600; cursor: pointer; border: 1px solid transparent; background: none; font: 600 14px Inter, sans-serif; text-align: left; }
+  .navbtn svg { width: 18px; height: 18px; flex: none; }
+  .navbtn:hover { color: var(--text); background: var(--panel); }
+  .navbtn.on { color: var(--text); background: var(--panel2); border-color: var(--line2); }
+  .navbtn.on svg { color: var(--lime); }
+  .navbtn .count { margin-left: auto; background: var(--lime); color: #11160a; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 99px; }
+  .sidefoot { margin-top: auto; padding: 10px 8px; font-size: 12px; color: var(--dim); }
+  main { padding: calc(24px + env(safe-area-inset-top)) 28px 90px; max-width: 1240px; width: 100%; }
+  .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+  .top h1 { margin: 0; font-size: 24px; letter-spacing: -.3px; }
+  .top .sub { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  .mode { padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid; }
+  .mode.practice { background: #2a2410; color: var(--amber); border-color: #5a4818; }
+  .mode.live { background: #0f2a18; color: var(--green); border-color: #1d5a32; }
+  .page { display: none; }
+  .page.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+
+  /* ---------- pieces ---------- */
+  .card { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  .cols { display: grid; gap: 14px; }
+  .cols > *, main { min-width: 0; }
+  .c2 { grid-template-columns: 1fr 1fr; } .c3 { grid-template-columns: repeat(3, 1fr); } .c32 { grid-template-columns: 3fr 2fr; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .stat b { display: block; font: 700 22px var(--mono); letter-spacing: -.5px; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .muted { color: var(--muted); } .dim { color: var(--dim); } .small { font-size: 12px; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn { background: #151b25; color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 13px; font: 600 13px Inter, sans-serif; cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: #1b2230; }
   .btn.lime { background: var(--lime); color: #11160a; border-color: var(--lime); }
   .btn.lime:hover { filter: brightness(1.06); }
   .btn.red { color: var(--red); }
   .btn.ghost { background: transparent; border-color: transparent; }
+  .btn.sm { padding: 5px 9px; font-size: 12px; border-radius: 8px; }
   .btn:disabled { opacity: .45; cursor: default; }
-  a.btn { text-decoration: none; display: inline-block; }
-
-  .wallet { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
-  .wallet .addr { font: 600 13px ui-monospace, Consolas, monospace; word-break: break-all; }
-  .wallet .bal { font-size: 26px; font-weight: 800; }
-  .muted { color: var(--muted); }
-  .small { font-size: 12px; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   input, textarea, select { background: var(--tile); color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 9px 11px; font: 14px Inter, sans-serif; width: 100%; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #4a5a20; box-shadow: 0 0 0 3px rgba(213,242,108,.08); }
   textarea { resize: vertical; min-height: 64px; }
   label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
-
-  .form { display: none; }
-  .form.open { display: block; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .grid .full { grid-column: 1 / -1; }
   .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); }
   .check input { width: auto; }
+  .err { color: var(--red); font-size: 13px; min-height: 18px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line2); background: var(--tile); color: var(--muted); }
+  .chip.safe { color: var(--green); border-color: #1d5a32; background: #0c2016; }
+  .chip.hot { color: var(--amber); border-color: #5a3f17; background: #241a0b; }
+  .chip.you { color: var(--blue); border-color: #1f3a66; background: #0d1a2e; }
+  .chip.bot { color: var(--violet); border-color: #3c3166; background: #17132b; }
+  .chip.red { color: var(--red); border-color: #5a1d1d; background: #240e0e; }
+  .chip.lime { color: var(--lime); border-color: #4a5a20; background: var(--limeDim); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .tablewrap { overflow-x: auto; margin: 0 -6px; }
+  .empty { text-align: center; color: var(--muted); padding: 30px 16px; }
+  .toast { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: #1b2230; border: 1px solid var(--line2); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; max-width: 90vw; z-index: 60; }
+  .toast.show { opacity: 1; }
+
+  /* switches */
+  .switch { display: flex; align-items: center; gap: 14px; cursor: pointer; user-select: none; }
+  .switch .knob { width: 52px; height: 30px; border-radius: 99px; background: #1d2430; border: 1px solid var(--line2); position: relative; transition: .2s; flex: none; }
+  .switch .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #5d6676; transition: .2s; }
+  .switch.on .knob { background: var(--limeDim); border-color: #5c7024; }
+  .switch.on .knob::after { left: 25px; background: var(--lime); box-shadow: 0 0 12px rgba(213,242,108,.6); }
+  .switch.warn.on .knob { background: #2a1f0e; border-color: #6b4a18; }
+  .switch.warn.on .knob::after { background: var(--amber); box-shadow: 0 0 12px rgba(242,180,91,.5); }
+  .switch b { display: block; font-size: 15px; }
+  .switch span { color: var(--muted); font-size: 12.5px; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); display: inline-block; }
+  .pulse.on { background: var(--green); box-shadow: 0 0 0 0 rgba(95,220,138,.6); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(95,220,138,0); } 100% { box-shadow: 0 0 0 0 rgba(95,220,138,0); } }
+
+  /* lists */
+  .todo { display: grid; gap: 8px; }
+  .todo div { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--tile); border: 1px solid var(--line); border-radius: 10px; }
+  .todo i { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); flex: none; }
+  .todo i.a { background: var(--amber); } .todo i.r { background: var(--red); }
+  .todo div .btn { margin-left: auto; }
+  .feed { display: grid; gap: 4px; max-height: 300px; overflow: auto; font-size: 12.5px; }
+  .feed div { display: grid; grid-template-columns: 54px 1fr; gap: 8px; padding: 5px 8px; border-radius: 6px; background: var(--tile); }
+  .q { display: grid; gap: 8px; }
+  .qi { display: flex; gap: 12px; align-items: center; padding: 10px; background: var(--tile); border: 1px solid var(--line); border-radius: 12px; }
+  .qi img, .qi .noimg { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; flex: none; background: #000; }
+  .qi .noimg { display: grid; place-items: center; color: var(--dim); font-size: 11px; border: 1px dashed var(--line2); background: none; }
+  .qi .t { flex: 1; min-width: 0; }
+  .qi .t b { font-size: 14px; }
+  .qi .t div { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ideas */
+  .ideas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .idea { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 9px; }
+  .idea .nm { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+  .idea .nm span { color: var(--muted); font-weight: 600; font-size: 14px; }
+  .idea .tag { color: var(--text); font-size: 13px; }
+  .idea .why { color: var(--muted); font-size: 12px; }
+  .notes { display: grid; gap: 3px; font-size: 12px; }
+  .notes div::before { content: "✓ "; color: var(--green); font-weight: 700; }
+  .notes div.bad::before { content: "✗ "; color: var(--red); }
+  .notes div.meh::before { content: "• "; color: var(--amber); }
+  .idea .row { margin-top: auto; }
+
+  /* charts */
+  .chart { width: 100%; height: 170px; display: block; }
+  .chart text { fill: var(--dim); font: 10px Inter, sans-serif; }
+
+  /* modal */
+  .modal { position: fixed; inset: 0; background: rgba(3,5,8,.75); backdrop-filter: blur(4px); display: none; align-items: flex-start; justify-content: center; z-index: 50; overflow: auto; padding: 40px 16px; }
+  .modal.open { display: flex; }
+  .modal .box { width: min(760px, 100%); background: var(--panel2); border: 1px solid var(--line2); border-radius: 18px; padding: 22px; }
+  .logoed { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
+  .logoed canvas, .logoed img { width: 200px; height: 200px; border-radius: 20px; border: 1px solid var(--line2); background: #000; }
+
+  /* coin cards (launches) */
+  .form { display: none; } .form.open { display: block; }
   .sitebox { border: 1px solid var(--line2); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.02); }
   .siteline { margin-top: 12px; font-size: 13px; color: var(--muted); }
-  .siteline a { color: var(--lime); }
-  .err { color: var(--red); font-size: 13px; min-height: 18px; }
-
   .coin-head { display: flex; gap: 16px; align-items: flex-start; }
-  .coin-head img { width: 62px; height: 62px; border-radius: 14px; object-fit: cover; background: #000; flex: none; }
-  .coin-title { font-size: 20px; font-weight: 700; }
+  .coin-head img { width: 58px; height: 58px; border-radius: 14px; object-fit: cover; background: #000; flex: none; }
+  .coin-title { font-size: 19px; font-weight: 700; }
   .coin-title .tk { color: var(--muted); font-weight: 600; }
-  .sub { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; color: var(--muted); }
+  .csub { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 13px; }
   .pill { padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; }
   .pill.live { color: var(--amber); background: #2a1f0e; border-color: #5a3f17; }
   .pill.sched { color: var(--blue); background: #0f1d33; border-color: #1f3a66; }
   .pill.earn { color: var(--green); background: #0f2a1a; border-color: #1d5a32; }
   .pill.dud, .pill.fail { color: var(--red); background: #2a1010; border-color: #5a1d1d; }
   .pill.stop { color: var(--muted); background: #161b25; border-color: var(--line2); }
-
-  .stages { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 20px 0 14px; }
+  .stages { display: grid; gap: 8px; margin: 18px 0 14px; }
   .stage i { display: block; height: 4px; border-radius: 4px; background: var(--line2); margin-bottom: 7px; }
   .stage span { font-size: 12px; color: var(--muted); }
   .stage.done i { background: var(--green); }
-  .stage.now i { background: var(--lime); }
+  .stage.now i { background: var(--lime); box-shadow: 0 0 10px rgba(213,242,108,.5); }
   .stage.now span { color: var(--lime); font-weight: 600; }
-  .stage.bad i { background: var(--red); }
-  .stage.bad span { color: var(--red); font-weight: 600; }
-  .stage.skip i { background: var(--amber); }
-  .stage.todo span { color: var(--dim); }
-
+  .stage.bad i { background: var(--red); } .stage.bad span { color: var(--red); font-weight: 600; }
+  .stage.skip i { background: var(--amber); } .stage.todo span { color: var(--dim); }
   .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
   .tile { background: var(--tile); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-  .tile b { display: block; font-size: 19px; font-weight: 700; }
+  .tile b { display: block; font: 700 18px var(--mono); }
   .tile span { font-size: 12px; color: var(--muted); }
-  .pos { color: var(--green); } .neg { color: var(--red); }
-
   .checkline { margin: 16px 0 8px; color: var(--muted); }
   .bars { display: flex; align-items: flex-end; gap: 10%; height: 54px; padding: 0 5%; }
   .bars div { flex: 1; max-width: 280px; background: var(--blue); min-height: 2px; border-radius: 2px 2px 0 0; }
@@ -101,108 +191,306 @@
   .list { margin-top: 8px; font-size: 12.5px; display: grid; gap: 3px; max-height: 240px; overflow: auto; }
   .list div { display: grid; grid-template-columns: 70px 1fr 90px; gap: 8px; padding: 4px 8px; background: var(--tile); border-radius: 6px; }
   .list.log div { grid-template-columns: 70px 1fr; }
-  .mono { font-family: ui-monospace, Consolas, monospace; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-  .big { font-size: 34px; font-weight: 800; margin: 8px 0 2px; }
-  .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1c2536; border: 1px solid var(--line2); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; max-width: 90vw; }
-  .toast.show { opacity: 1; }
+  .big { font: 800 32px var(--mono); margin: 8px 0 2px; letter-spacing: -1px; }
+  .addr { font: 600 13px var(--mono); word-break: break-all; }
+  .seg { display: inline-flex; background: var(--tile); border: 1px solid var(--line2); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { background: none; border: 0; color: var(--muted); font: 600 12.5px Inter, sans-serif; padding: 6px 11px; border-radius: 7px; cursor: pointer; }
+  .seg button.on { background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .wordbar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; min-width: 60px; }
+  .wordbar i { display: block; height: 100%; background: linear-gradient(90deg, #6d8a1e, var(--lime)); }
 
-  @media (max-width: 860px) {
-    .tiles, .stages { grid-template-columns: repeat(3, 1fr); }
-    .grid { grid-template-columns: 1fr; }
-    .wallet { grid-template-columns: 1fr; }
+  @media (max-width: 960px) {
+    .app { grid-template-columns: 1fr; }
+    nav.side { position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; flex-direction: row; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); z-index: 40; justify-content: space-around; gap: 0; background: rgba(7,9,13,.92); }
+    .brand, .sidefoot { display: none; }
+    .navbtn { flex-direction: column; gap: 3px; font-size: 10.5px; padding: 6px 4px; flex: 1; align-items: center; position: relative; }
+    .navbtn .count { position: absolute; top: 0; right: 14%; margin: 0; font-size: 9.5px; padding: 0 5px; }
+    main { padding: calc(16px + env(safe-area-inset-top)) 16px 100px; }
+    .c2, .c3, .c32, .grid, .logoed { grid-template-columns: 1fr; }
+    .tiles, .stages { grid-template-columns: repeat(3, 1fr) !important; }
     .coin-head { flex-wrap: wrap; }
+    .top h1 { font-size: 21px; }
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="logo">AUTO<span>PILOT</span></div>
-    <div id="mode" class="mode"></div>
-    <div id="warns" class="warn"></div>
-    <div class="spacer"></div>
-    <button class="btn lime" id="newBtn">+ New coin</button>
-  </header>
+<div class="app">
+  <nav class="side" id="nav">
+    <div class="brand"><img src="/icon-512.png" alt="">AUTO<span>PILOT</span></div>
+    <button class="navbtn on" data-page="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+    <button class="navbtn" data-page="launches"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19c2-6 6-11 14-14-3 8-8 12-14 14z"/><path d="M9 15l-3-3"/></svg>Launches<span class="count" id="nLive" hidden></span></button>
+    <button class="navbtn" data-page="ideas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>Ideas<span class="count" id="nIdeas" hidden></span></button>
+    <button class="navbtn" data-page="brain"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Brain</button>
+    <button class="navbtn" data-page="results"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Results</button>
+    <button class="navbtn" data-page="radar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6-6"/></svg>Radar</button>
+    <button class="navbtn" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</button>
+    <div class="sidefoot" id="sidefoot"></div>
+  </nav>
 
-  <div class="card wallet">
-    <div>
-      <div class="muted small">MAIN WALLET - send SOL here from Phantom; AUTOPILOT funds each coin's fresh wallet from it</div>
-      <div class="row" style="margin-top:6px"><span class="addr" id="mainAddr">...</span><button class="btn" data-copy="main">Copy</button></div>
-      <div class="row" style="margin-top:12px; max-width:640px">
-        <input id="withdrawTo" placeholder="Your Phantom address (where Withdraw all sends SOL)">
-        <button class="btn" id="saveTo">Save</button>
-        <button class="btn" id="withdrawMain">Withdraw all</button>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn" id="exportMain">Export main key</button>
-        <a class="btn" id="backupBtn" href="/api/backup">Download backup</a>
-        <label class="btn" style="margin:0">Restore backup<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
-        <button class="btn red" id="logoutBtn" hidden>Log out</button>
-      </div>
+  <main>
+    <div class="top">
+      <div><h1 id="pageTitle">Home</h1><div class="sub" id="pageSub">Your launcher at a glance</div></div>
+      <div class="spacer"></div>
+      <div id="mode" class="mode"></div>
     </div>
-    <div style="text-align:right"><div class="bal" id="mainBal">-</div><div class="muted small">SOL</div></div>
-  </div>
 
-  <form class="card form" id="form">
-    <div class="coin-title" style="margin-bottom:14px">New coin</div>
-    <div class="grid">
-      <div><label>Image (PNG / JPG / GIF / WebP)</label><input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required></div>
-      <div><label>Name</label><input name="name" maxlength="32" placeholder="Anonymous Card" required></div>
-      <div><label>Ticker</label><input name="symbol" maxlength="11" placeholder="ANONCARD" required></div>
-      <div class="full"><label>Description</label><textarea name="description" maxlength="1000"></textarea></div>
-      <div><label>Website (leave empty if AUTOPILOT makes it below)</label><input name="website" placeholder="https://..."></div>
-      <div><label>X (Twitter) link</label><input name="twitter" placeholder="https://x.com/..."></div>
-      <div><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
-      <div class="full sitebox">
-        <label class="check" style="margin-bottom:12px"><input type="checkbox" name="makeSite" id="makeSite"> <b>Make the website for me</b>&nbsp;<span class="muted">- site + banner, live on its own subdomain in about a minute</span></label>
-        <div class="grid" id="siteFields" style="display:none">
-          <div><label>Subdomain</label><div class="row" style="flex-wrap:nowrap"><input name="sub" id="sub" placeholder="ticker" style="flex:1"><span class="muted small" id="siteDomain">.degenlab.fun</span></div></div>
-          <div><label>Tagline (one short line)</label><input name="tagline" maxlength="80" placeholder="running on one. barely."></div>
-          <div><label>Main color (picked from the logo)</label><input name="accent" id="accent" type="color" value="#ff86b6" style="height:40px; padding:3px"></div>
-          <div class="full"><label>Story for the website (2-3 sentences, leave empty to use the description)</label><textarea name="story" maxlength="600"></textarea></div>
+    <!-- ================= HOME ================= -->
+    <section class="page on" id="p-home">
+      <div class="cols c2" style="margin-bottom:14px">
+        <div class="card" style="margin:0">
+          <div class="switch" id="apSwitch"><div class="knob"></div><div><b>Autopilot</b><span id="apState">-</span></div></div>
+          <div class="muted small" id="apStatus" style="margin-top:12px"></div>
+        </div>
+        <div class="card" style="margin:0">
+          <div class="switch warn" id="lockSwitch"><div class="knob"></div><div><b>Spending lock</b><span id="lockState">-</span></div></div>
+          <div class="muted small" style="margin-top:12px">While it's on, autopilot never funds a new launch. Running coins keep selling + claiming.</div>
         </div>
       </div>
-      <div>
-        <label>Pair (what people buy it with)</label>
-        <input id="pairSearch" placeholder="Search: PUMP, NVDA, USDC..." style="margin-bottom:6px">
-        <select name="quote" id="pairSelect"><option value="So11111111111111111111111111111111111111112">SOL</option></select>
-        <div class="muted small" id="pairNote" style="margin-top:4px"></div>
-      </div>
-      <div><label>Dev buy (SOL)</label><input name="devBuySol" type="number" step="0.01" min="0" max="20" value="0.9"></div>
-      <div>
-        <label>Launch time</label>
-        <div class="row">
-          <select id="when" style="width:110px"><option value="now">Now</option><option value="at" selected>At time</option></select>
-          <input type="datetime-local" id="whenAt" style="flex:1; width:auto">
+      <div class="stats" id="homeStats"></div>
+      <div class="cols c32">
+        <div>
+          <div class="card"><h2>Profit per day</h2><p class="hint">After all costs, last 14 days (by launch day)</p><svg class="chart" id="homeChart"></svg></div>
+          <div class="card"><h2>Next up</h2><p class="hint">Approved brands, in the order autopilot starts them</p><div class="q" id="homeQueue"></div></div>
+        </div>
+        <div>
+          <div class="card"><h2>To do</h2><p class="hint">Things only you can do</p><div class="todo" id="todo"></div></div>
+          <div class="card"><h2>Autopilot log</h2><div class="feed" id="apLog"></div></div>
         </div>
       </div>
-      <div><label>Check after (minutes)</label><input name="checkMinutes" type="number" min="1" max="120" value="5"></div>
-      <div><label>Needs this many outside wallets to pass</label><input name="minWallets" type="number" min="1" value="15"></div>
-      <div><label>Auto-sell dev bag when it's worth (x dev buy, 0 = off)</label><input name="takeProfitX" type="number" step="0.1" min="0" value="2"></div>
-      <div><label>Auto-claim + withdraw creator fees at (SOL, 0 = off)</label><input name="autoClaimSol" type="number" step="0.01" min="0" value="0.02"></div>
-      <div style="align-self:end"><label class="check"><input type="checkbox" name="autoSellDud" checked> If it fails the check: sell dev bag + send SOL back to main</label></div>
-      <div class="full"><label>X post after launch - {NAME} {TICKER} {CA} {WEBSITE} {LINK} are filled in</label>
-        <textarea name="xPost" maxlength="280">{NAME} ${TICKER} is live on Pump.fun
+    </section>
+
+    <!-- ================= LAUNCHES ================= -->
+    <section class="page" id="p-launches">
+      <div class="row" style="margin-bottom:14px">
+        <div class="seg" id="coinFilter"><button class="on" data-f="active">Active</button><button data-f="all">All</button><button data-f="done">Finished</button></div>
+        <div class="spacer"></div>
+        <button class="btn lime" id="newBtn">+ Launch a coin by hand</button>
+      </div>
+      <form class="card form" id="form">
+        <div class="coin-title" style="margin-bottom:14px">New coin (by hand)</div>
+        <div class="grid">
+          <div><label>Image (PNG / JPG / GIF / WebP)</label><input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required></div>
+          <div><label>Name</label><input name="name" maxlength="32" placeholder="Anonymous Card" required></div>
+          <div><label>Ticker</label><input name="symbol" maxlength="11" placeholder="ANONCARD" required></div>
+          <div class="full"><label>Description</label><textarea name="description" maxlength="1000"></textarea></div>
+          <div><label>Website (leave empty if AUTOPILOT makes it below)</label><input name="website" placeholder="https://..."></div>
+          <div><label>X (Twitter) link</label><input name="twitter" placeholder="https://x.com/..."></div>
+          <div><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
+          <div class="full sitebox">
+            <label class="check" style="margin-bottom:12px"><input type="checkbox" name="makeSite" id="makeSite"> <b>Make the website for me</b>&nbsp;<span class="muted">- site + banner on its own subdomain</span></label>
+            <div class="grid" id="siteFields" style="display:none">
+              <div><label>Subdomain</label><div class="row" style="flex-wrap:nowrap"><input name="sub" id="sub" placeholder="ticker" style="flex:1"><span class="muted small" id="siteDomain">.degenlab.fun</span></div></div>
+              <div><label>Tagline (one short line)</label><input name="tagline" maxlength="80"></div>
+              <div><label>Main color</label><input name="accent" id="accent" type="color" value="#ff86b6" style="height:40px; padding:3px"></div>
+              <div class="full"><label>Story for the website</label><textarea name="story" maxlength="600"></textarea></div>
+            </div>
+          </div>
+          <div>
+            <label>Pair (what people buy it with)</label>
+            <input id="pairSearch" placeholder="Search: PUMP, NVDA, USDC..." style="margin-bottom:6px">
+            <select name="quote" id="pairSelect"><option value="So11111111111111111111111111111111111111112">SOL</option></select>
+            <div class="muted small" id="pairNote" style="margin-top:4px"></div>
+          </div>
+          <div><label>Dev buy (SOL)</label><input name="devBuySol" type="number" step="0.01" min="0" max="20" value="0.5"></div>
+          <div>
+            <label>Launch time</label>
+            <div class="row" style="flex-wrap:nowrap">
+              <select id="when" style="width:110px"><option value="now">Now</option><option value="at" selected>At time</option></select>
+              <input type="datetime-local" id="whenAt" style="flex:1; width:auto">
+            </div>
+          </div>
+          <div><label>Check after (minutes)</label><input name="checkMinutes" type="number" min="1" max="120" value="5"></div>
+          <div><label>Outside wallets needed to pass</label><input name="minWallets" type="number" min="1" value="15"></div>
+          <div><label>Auto-sell dev bag at (x dev buy, 0 = off)</label><input name="takeProfitX" type="number" step="0.1" min="0" value="2"></div>
+          <div><label>Auto-claim + withdraw fees at (SOL, 0 = off)</label><input name="autoClaimSol" type="number" step="0.01" min="0" value="0.02"></div>
+          <div style="align-self:end"><label class="check"><input type="checkbox" name="autoSellDud" checked> If it fails the check: sell + send SOL back</label></div>
+          <div class="full"><label>X post after launch - {NAME} {TICKER} {CA} {WEBSITE} {LINK} are filled in</label>
+            <textarea name="xPost" maxlength="280">{NAME} ${TICKER} is live on Pump.fun
 
 CA: {CA}
 
 {WEBSITE}</textarea></div>
-    </div>
-    <div class="err" id="formErr"></div>
-    <div class="row"><button class="btn lime" type="submit" id="addBtn">Add to autopilot</button><button class="btn ghost" type="button" id="cancelBtn">Cancel</button></div>
-  </form>
+        </div>
+        <div class="err" id="formErr"></div>
+        <div class="row"><button class="btn lime" type="submit" id="addBtn">Add to autopilot</button><button class="btn ghost" type="button" id="cancelBtn">Cancel</button></div>
+      </form>
+      <div id="coins"></div>
+    </section>
 
-  <div id="coins"></div>
+    <!-- ================= IDEAS ================= -->
+    <section class="page" id="p-ideas">
+      <div class="card">
+        <h2>Make new coin ideas</h2>
+        <p class="hint">Built from the words that are taking off on Pump.fun right now (Brain tab). Every name is checked: it must carry a market word, not be banned, not already used, and DexScreener must have no big coin with the same name or ticker.</p>
+        <div class="row">
+          <div class="seg" id="ideaSource"><button class="on" data-s="both">Safe + hot words</button><button data-s="safe">Safe words only</button><button data-s="hot">Hot words only</button></div>
+          <select id="ideaCount" style="width:auto"><option>3</option><option selected>6</option><option>10</option><option>20</option></select>
+          <button class="btn lime" id="genBtn">Generate</button>
+          <div class="spacer"></div>
+          <button class="btn" id="ownBtn">+ My own idea</button>
+        </div>
+        <form id="ownForm" style="display:none; margin-top:14px" class="grid">
+          <div><label>Name</label><input name="name" maxlength="32" required></div>
+          <div><label>Ticker</label><input name="symbol" maxlength="11" required></div>
+          <div style="align-self:end"><button class="btn lime">Add idea</button></div>
+          <div class="full"><label>Description</label><textarea name="description" maxlength="1000"></textarea></div>
+        </form>
+      </div>
+      <h3 style="margin:22px 0 10px">Waiting for you <span class="muted small" id="ideaCountLbl"></span></h3>
+      <div class="ideas" id="ideaList"></div>
+      <div class="card" style="margin-top:18px">
+        <h2>Launch queue</h2><p class="hint">Approved brands. New ones launch in this order; due retries go first.</p>
+        <div class="q" id="queue"></div>
+      </div>
+      <div class="card">
+        <h2>All brands</h2>
+        <div class="row" style="margin:6px 0 10px"><div class="seg" id="brandFilter"><button class="on" data-f="all">All</button><button data-f="live">Live</button><button data-f="runner">Runners</button><button data-f="retired">Retired</button><button data-f="rejected">Rejected</button></div></div>
+        <div class="tablewrap"><table id="brandTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= BRAIN ================= -->
+    <section class="page" id="p-brain">
+      <div class="stats" id="brainStats"></div>
+      <div class="card"><h2>Market heat</h2><p class="hint">New Pump.fun coins per 5 minutes, last 24 hours</p><svg class="chart" id="heatChart"></svg></div>
+      <div class="cols c2">
+        <div class="card">
+          <h2><span class="chip safe">Safe words</span></h2>
+          <p class="hint">Words bot groups buy more often than normal, over up to 7 days. Lift 2.0 = twice the normal hit rate.</p>
+          <div class="tablewrap"><table id="safeTable"></table></div>
+        </div>
+        <div class="card">
+          <h2><span class="chip hot">Hot words</span></h2>
+          <p class="hint">Exact words in coins the bots bought (or that ran) in the last 6 hours.</p>
+          <div id="hotList" class="row"></div>
+        </div>
+      </div>
+      <div class="cols c2">
+        <div class="card"><h2>Watching now</h2><p class="hint">New coins in their first 10 minutes</p><div class="tablewrap"><table id="watchTable"></table></div></div>
+        <div class="card"><h2>Just finished</h2><p class="hint">How each new coin did in its first 10 minutes</p><div class="tablewrap"><table id="recentTable"></table></div></div>
+      </div>
+    </section>
+
+    <!-- ================= RESULTS ================= -->
+    <section class="page" id="p-results">
+      <div class="row" style="margin-bottom:14px"><div class="spacer"></div><a class="btn" href="/api/results.csv">Export CSV</a></div>
+      <div class="stats" id="resStats"></div>
+      <div class="card"><h2>Profit per day</h2><p class="hint">Profit includes fees, the dev bag and any losses</p><svg class="chart" id="resChart"></svg></div>
+      <div class="cols c2">
+        <div class="card"><h2>By brand</h2><div class="tablewrap"><table id="byBrand"></table></div></div>
+        <div class="card"><h2>By pair + dev buy</h2><p class="hint">Profit per launch is the number that matters</p><div class="tablewrap"><table id="byPair"></table></div></div>
+      </div>
+      <div class="card"><h2>Every launch</h2><div class="tablewrap"><table id="resTable"></table></div></div>
+      <div class="card"><h2>Unclaimed fees on old coins</h2><div class="tablewrap"><table id="unclaimed"></table></div></div>
+    </section>
+
+    <!-- ================= RADAR ================= -->
+    <section class="page" id="p-radar">
+      <div class="stats" id="radarStats"></div>
+      <div class="card">
+        <h2>Bot radar</h2>
+        <p class="hint">Outside wallets that bought your coins, most frequent first. Tap a name to label a wallet.</p>
+        <div class="tablewrap"><table id="radarTable"></table></div>
+      </div>
+      <div class="card">
+        <h2>Market bots the brain knows</h2>
+        <p class="hint">Wallets that bought in the first seconds of 4+ different Pump.fun coins in the last 24 hours</p>
+        <div class="tablewrap"><table id="marketBots"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="page" id="p-settings">
+      <form class="card" id="apForm">
+        <h2>Autopilot rules</h2>
+        <p class="hint">How the autopilot launches approved brands. Changes apply right away.</p>
+        <div class="grid">
+          <div><label>Dev buy per launch (SOL)</label><input name="devBuySol" type="number" step="0.01" min="0" max="20"></div>
+          <div><label>Fund + launch this many minutes after it starts</label><input name="leadMinutes" type="number" min="1" max="120"></div>
+          <div><label>Minimum gap between launches (minutes)</label><input name="minGapMinutes" type="number" min="0" max="1440"></div>
+          <div><label>Tries per brand per day</label><input name="triesPerDay" type="number" min="1" max="24"></div>
+          <div><label>Wait before retrying a dud (minutes)</label><input name="retryGapMinutes" type="number" min="0" max="2880"></div>
+          <div><label>Retire a brand after (days)</label><input name="maxDays" type="number" min="1" max="30"></div>
+          <div><label>Max launches per 24 hours</label><input name="maxLaunchesPerDay" type="number" min="1" max="100"></div>
+          <div><label>Launch hours from (your time, 0-24)</label><input name="windowStart" type="number" min="0" max="24"></div>
+          <div><label>Launch hours until (0-24; 0 to 24 = all day)</label><input name="windowEnd" type="number" min="0" max="24"></div>
+          <div><label>Check after (minutes)</label><input name="checkMinutes" type="number" min="1" max="120"></div>
+          <div><label>Outside wallets needed to pass</label><input name="minWallets" type="number" min="1" max="1000"></div>
+          <div><label>Auto-sell dev bag at (x dev buy, 0 = off)</label><input name="takeProfitX" type="number" step="0.1" min="0" max="100"></div>
+          <div><label>Auto-claim fees at (SOL, 0 = off)</label><input name="autoClaimSol" type="number" step="0.01" min="0" max="10"></div>
+        </div>
+        <h2 style="margin-top:22px">Profit sweep</h2>
+        <p class="hint">The main wallet is the float that pays for launches. When it grows past the target + the extra, the extra goes to your Phantom (saved below).</p>
+        <div class="grid">
+          <div style="align-self:end"><label class="check"><input type="checkbox" name="autoSweep"> Sweep profit to my Phantom automatically</label></div>
+          <div><label>Keep in the float (SOL)</label><input name="floatTarget" type="number" step="0.01" min="0"></div>
+          <div><label>Sweep once the extra is at least (SOL)</label><input name="sweepAbove" type="number" step="0.01" min="0.01"></div>
+        </div>
+        <div class="err" id="apErr"></div>
+        <button class="btn lime">Save rules</button>
+      </form>
+
+      <div class="card">
+        <h2>Main wallet (the float)</h2>
+        <p class="hint">Send SOL here from Phantom. Every launch gets its own fresh wallet funded from this one, and SOL comes back here afterwards.</p>
+        <div class="row"><span class="addr" id="mainAddr">...</span><button class="btn sm" data-copy="main">Copy</button><span class="spacer"></span><b class="mono" style="font-size:22px" id="mainBal">-</b><span class="muted">SOL</span></div>
+        <div class="row" style="margin-top:14px; max-width:680px">
+          <input id="withdrawTo" placeholder="Your Phantom address (where Withdraw all + profit sweep send SOL)" style="flex:1; width:auto">
+          <button class="btn" id="saveTo">Save</button>
+          <button class="btn" id="withdrawMain">Withdraw all</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="exportMain">Export main key</button>
+          <a class="btn" id="backupBtn" href="/api/backup">Download backup</a>
+          <label class="btn" style="margin:0">Restore backup<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+          <button class="btn red" id="logoutBtn" hidden>Log out</button>
+        </div>
+      </div>
+      <div class="card"><h2>Connections</h2><div class="todo" id="conns"></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- approve / edit brand -->
+<div class="modal" id="modal">
+  <form class="box" id="approveForm">
+    <div class="row"><h2 style="margin:0" id="mTitle">Approve</h2><div class="spacer"></div><button type="button" class="btn ghost" id="mClose">✕</button></div>
+    <p class="hint muted small" style="margin:6px 0 16px">Check the name, add a logo, and it joins the launch queue.</p>
+    <div class="logoed">
+      <div>
+        <canvas id="logoCanvas" width="512" height="512"></canvas>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="btn sm" id="shuffleLogo">Shuffle logo</button>
+          <label class="btn sm" style="margin:0">Upload my own<input type="file" id="ownLogo" accept="image/png,image/jpeg,image/gif,image/webp" hidden></label>
+        </div>
+        <div class="muted small" id="logoNote" style="margin-top:6px">Made for you - flat mark, one accent, no words.</div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div><label>Name</label><input name="name" maxlength="32"></div>
+        <div><label>Ticker</label><input name="symbol" maxlength="11"></div>
+        <div class="full"><label>Description (shown on Pump.fun)</label><textarea name="description" maxlength="1000"></textarea></div>
+        <div><label>Website (optional)</label><input name="website" placeholder="https://..."></div>
+        <div><label>X link (optional)</label><input name="twitter" placeholder="https://x.com/..."></div>
+        <div class="full"><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
+        <div class="full"><label>X post after launch ({CA} {WEBSITE} {LINK} filled in)</label><textarea name="xPost" maxlength="280"></textarea></div>
+      </div>
+    </div>
+    <div class="err" id="mErr"></div>
+    <div class="row"><button class="btn lime" id="mSave">Approve + add to queue</button><button type="button" class="btn ghost" id="mCancel">Cancel</button></div>
+  </form>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+// el.html = "..." only touches the page when the HTML really changed, so buttons aren't swapped out mid-click
+Object.defineProperty(Element.prototype, "html", { set(v) { if (this._h !== v) { this._h = v; this.innerHTML = v; } } });
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmt = (n, d = 3) => (Number(n) || 0).toFixed(d);
-let state = null, skew = 0;
+const sgn = (n, d = 3) => `<span class="${n >= 0 ? "pos" : "neg"}">${n >= 0 ? "+" : ""}${fmt(n, d)}</span>`;
+let state = null, skew = 0, page = "home", brainData = null, resData = null, radarData = null;
 const openDetails = new Set();
 
 function toast(msg) {
@@ -210,30 +498,80 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove("show"), 2600);
+  toast.t = setTimeout(() => t.classList.remove("show"), 2800);
 }
-async function copy(text, what) {
-  await navigator.clipboard.writeText(text);
-  toast(`${what} copied`);
-}
+async function copy(text, what) { await navigator.clipboard.writeText(text); toast(`${what} copied`); }
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Something went wrong");
   return j;
 }
-
+async function get(url) {
+  const r = await fetch(url);
+  if (r.status === 401) return void (location.href = "/login");
+  return r.json();
+}
 function dur(ms) {
   if (ms <= 0) return "now";
   const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
   return h ? `${h}h ${m}m` : m ? `${m}m ${String(r).padStart(2, "0")}s` : `${r}s`;
 }
+function ago(t) {
+  const s = Math.max(0, Math.round((Date.now() + skew - t) / 1000));
+  return s < 60 ? "<1m" : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+}
 const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const short = (a) => a ? `${a.slice(0, 4)}...${a.slice(-4)}` : "";
+const dayTime = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const short = (a) => a ? `${a.slice(0, 4)}…${a.slice(-4)}` : "";
 
+// ---------- pages ----------
+const PAGES = {
+  home: ["Home", "Your launcher at a glance"], launches: ["Launches", "Every coin: getting ready, live, and finished"],
+  ideas: ["Ideas", "Coin ideas, the launch queue and every brand"], brain: ["Brain", "What the market is buying right now"],
+  results: ["Results", "Every launch and what it made"], radar: ["Bot radar", "Who buys your coins"], settings: ["Settings", "Autopilot rules, wallet and backups"],
+};
+function go(p) {
+  page = p;
+  $$(".navbtn").forEach((b) => b.classList.toggle("on", b.dataset.page === p));
+  $$(".page").forEach((s) => s.classList.toggle("on", s.id === `p-${p}`));
+  $("#pageTitle").textContent = PAGES[p][0];
+  $("#pageSub").textContent = PAGES[p][1];
+  try { localStorage.setItem("ap-page", p); } catch {}
+  if (p === "brain") loadBrain();
+  if (p === "results" || p === "home") loadResults();
+  if (p === "radar") loadRadar();
+  if (p === "settings") fillApForm();
+  render();
+  scrollTo(0, 0);
+}
+$$(".navbtn").forEach((b) => (b.onclick = () => go(b.dataset.page)));
+
+// ---------- charts ----------
+function barChart(svg, values, labels, { signed = false, color = "#6fa3ff", unit = "" } = {}) {
+  const W = svg.clientWidth || 600, H = svg.clientHeight || 170;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const pad = { l: 38, r: 6, t: 10, b: 20 };
+  const max = Math.max(0.0001, ...values.map((v) => Math.abs(v)));
+  const lo = signed ? -max : 0;
+  const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - (v - lo) / (max - lo));
+  const bw = (W - pad.l - pad.r) / values.length;
+  let out = "";
+  for (const g of signed ? [max, 0, -max] : [max, max / 2, 0]) out += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="#1a212c"/><text x="${pad.l - 6}" y="${y(g) + 3}" text-anchor="end">${+g.toFixed(g && Math.abs(g) < 1 ? 2 : 0)}</text>`;
+  values.forEach((v, i) => {
+    const x = pad.l + i * bw + bw * 0.18, w = Math.max(1, bw * 0.64);
+    const y0 = y(0), y1 = y(v);
+    const fill = signed ? (v >= 0 ? "#5fdc8a" : "#f26d6d") : color;
+    out += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${w}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="2" fill="${fill}" opacity=".9"><title>${esc(labels[i])}: ${fmt(v, 3)}${unit}</title></rect>`;
+    const every = Math.ceil(values.length / 8);
+    if (i % every === 0 && labels[i]) out += `<text x="${x + w / 2}" y="${H - 5}" text-anchor="middle">${esc(labels[i].length > 6 ? labels[i].slice(-5) : labels[i])}</text>`;
+  });
+  svg.innerHTML = out;
+}
+
+// ---------- coin cards (Launches) ----------
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 const isPair = (c) => c.quote && c.quote.mint !== SOL_MINT;
-// a pair coin gets the extra "Buy pair" stage after funding
 function stagesFor(c) {
   const s = [["fund", "Fund wallet"], ["upload", "Upload"], ["launch", "Launch"], ["post", "Post on X"], ["checks", "Checks"], ["earning", "Earning"]];
   if (isPair(c)) s.splice(1, 0, ["pair", `Buy ${c.quote.symbol}`]);
@@ -252,22 +590,19 @@ const PILL = {
   fund: ["sched", "Scheduled"], pair: ["sched", "Buying pair"], upload: ["sched", "Uploading"], launch: ["sched", "Ready"], post: ["live", "Live - posting"],
   checks: ["live", "Live - checking"], earning: ["earn", "Earning"], dud: ["dud", "Dud"], failed: ["fail", "Launch failed"], stopped: ["stop", "Stopped"],
 };
-
 function detailsBlock(c, key, title, inner) {
   const id = `${c.id}:${key}`;
   return `<details data-d="${id}" ${openDetails.has(id) ? "open" : ""}><summary>${title}</summary>${inner}</details>`;
 }
-
 function siteLine(c) {
   if (!c.makeSite) return c.website ? `<div class="siteline">Website: <a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a></div>` : "";
   const s = c.site ?? {};
-  const rebuild = `<button class="btn" data-act="rebuildSite" data-id="${c.id}" style="margin-left:8px">Rebuild website</button>`;
+  const rebuild = `<button class="btn sm" data-act="rebuildSite" data-id="${c.id}" style="margin-left:8px">Rebuild website</button>`;
   if (s.status === "building") return `<div class="siteline">Website: building ${esc(c.sub)}.${esc(state.site.domain)} ...</div>`;
   if (s.status === "failed") return `<div class="siteline" style="color:var(--red)">Website failed: ${esc(s.error)} ${rebuild}</div>`;
   if (s.status === "live") return `<div class="siteline">Website: <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a> · <a href="/banner/${c.id}">download banner</a> · <a href="/img/${esc(c.image)}" download>download logo</a></div>`;
   return "";
 }
-
 function coinCard(c, now) {
   const [pc, pl] = c.stage === "earning" && c.soldAt ? ["earn", "Sold - collecting fees"] : PILL[c.stage] ?? ["stop", c.stage];
   const st = c.stats;
@@ -290,30 +625,28 @@ function coinCard(c, now) {
       ? `${c.checkMinutes}-min check in ${dur(checkLeft)} — needs ${c.minWallets}+ outside wallets`
       : c.stage === "earning" ? `${c.soldAt ? "Dev bag sold · still collecting creator fees" : `Passed the check${tp ? ` · auto-sells at ${tp}x` : ""}`} · ${fmt(st.claimable, 4)} SOL fees claimable${c.autoClaimSol > 0 ? ` · auto-claims at ${c.autoClaimSol} SOL` : ""}`
       : c.stage === "dud" ? `Dud — ${st.outsideWallets}/${c.minWallets} outside wallets at the check · still collecting creator fees` : esc(c.status);
-    const profitCls = st.profit >= 0 ? "pos" : "neg";
     body = `
       <div class="tiles">
         <div class="tile"><b>${st.outsideWallets}</b><span>outside wallets</span></div>
         <div class="tile"><b>${fmt(st.outsideVolume, 2)}</b><span>outside volume (SOL)</span></div>
-        <div class="tile"><b>${fmt(st.feesClaimed)}</b><span>fees claimed (SOL)${st.claimable > 0.0005 ? ` · ${fmt(st.claimable)} ready` : ""}</span></div>
-        <div class="tile"><b>${c.soldAt && !st.devBagSol ? "sold" : fmt(st.devBagSol)}</b><span>dev bag (SOL) · peak ${fmt(st.peakX)}x${tp && !c.soldAt ? ` · sells at ${tp}x` : ""}</span></div>
-        <div class="tile"><b class="${profitCls}">${st.profit >= 0 ? "+" : ""}${fmt(st.profit)}</b><span>profit so far (est.)</span></div>
+        <div class="tile"><b>${fmt(st.feesClaimed)}</b><span>fees claimed${st.claimable > 0.0005 ? ` · ${fmt(st.claimable)} ready` : ""}</span></div>
+        <div class="tile"><b>${c.soldAt && !st.devBagSol ? "sold" : fmt(st.devBagSol)}</b><span>dev bag · peak ${fmt(st.peakX, 2)}x</span></div>
+        <div class="tile"><b>${sgn(st.profit)}</b><span>profit so far (est.)</span></div>
         <div class="tile"><b>${st.bundles.length}</b><span>bundle groups</span></div>
       </div>
       <div class="checkline">${checkLine}</div>
       <div class="bars ${mins.length > 8 ? "many" : ""}">${mins.slice(-40).map((v) => `<div style="height:${Math.max(2, (v / max) * 100)}%" title="${fmt(v)} SOL"></div>`).join("")}</div>
       <div class="muted small" style="margin-top:6px">outside volume per minute since launch</div>
-      ${detailsBlock(c, "b", `Bundle groups (${st.bundles.length})`, `<div class="list">${st.bundles.length ? st.bundles.map((b) => `<div><span>block</span><span class="mono">${b.slot} · ${b.wallets} wallets bought together</span><span>${fmt(b.sol)} SOL</span></div>`).join("") : `<div><span></span><span class="muted">None yet - 2+ wallets buying in the same block shows up here</span><span></span></div>`}</div>`)}
+      ${detailsBlock(c, "b", `Bundle groups (${st.bundles.length})`, `<div class="list">${st.bundles.length ? st.bundles.map((b) => `<div><span>block</span><span class="mono">${b.slot} · ${b.wallets} wallets bought together</span><span>${fmt(b.sol)} SOL</span></div>`).join("") : `<div><span></span><span class="muted">None yet</span><span></span></div>`}</div>`)}
       ${detailsBlock(c, "t", "Live trades", `<div class="list">${st.trades.length ? st.trades.map((t) => `<div><span class="muted">${clock(t.t)}</span><span class="mono">${t.wallet === c.wallet ? "you (dev)" : short(t.wallet)}</span><span class="${t.sol > 0 ? "pos" : "neg"}">${t.sol > 0 ? "buy" : "sell"} ${fmt(Math.abs(t.sol))}</span></div>`).join("") : `<div><span></span><span class="muted">No trades yet</span><span></span></div>`}</div>`)}`;
   }
   const logBlock = detailsBlock(c, "l", "Activity log", `<div class="list log">${c.log.map((l) => `<div><span class="muted">${clock(l.t)}</span><span>${esc(l.msg)}</span></div>`).join("")}</div>`);
-
-  const A = (action, label, cls = "") => `<button class="btn ${cls}" data-act="${action}" data-id="${c.id}">${label}</button>`;
+  const A = (action, label, cls = "") => `<button class="btn sm ${cls}" data-act="${action}" data-id="${c.id}">${label}</button>`;
   const actions = live ? [
-    `<a class="btn" target="_blank" rel="noopener" href="https://pump.fun/coin/${c.mint}">pump.fun</a>`,
-    `<a class="btn" target="_blank" rel="noopener" href="https://axiom.trade/t/${c.mint}">Axiom</a>`,
-    `<button class="btn" data-copy="ca" data-id="${c.id}">Copy CA</button>`,
-    `<button class="btn" data-copy="post" data-id="${c.id}">Copy CA post</button>`,
+    `<a class="btn sm" target="_blank" rel="noopener" href="https://pump.fun/coin/${c.mint}">pump.fun</a>`,
+    `<a class="btn sm" target="_blank" rel="noopener" href="https://axiom.trade/t/${c.mint}">Axiom</a>`,
+    `<button class="btn sm" data-copy="ca" data-id="${c.id}">Copy CA</button>`,
+    `<button class="btn sm" data-copy="post" data-id="${c.id}">Copy CA post</button>`,
     st.devBagSol > 0 ? A("sell", "Sell dev bag", "lime") : "",
     A("claim", "Claim fees", st.claimable > 0.001 ? "lime" : ""),
     A("withdraw", "Withdraw SOL"),
@@ -322,21 +655,20 @@ function coinCard(c, now) {
     A("exportKey", "Export key"),
   ] : [
     c.stage !== "launch" || c.launchAt > now ? A("launchNow", "Launch now", "lime") : "",
-    `<button class="btn" data-copy="wallet" data-id="${c.id}">Copy fresh wallet</button>`,
+    `<button class="btn sm" data-copy="wallet" data-id="${c.id}">Copy fresh wallet</button>`,
     A("withdraw", "Withdraw SOL"),
     A("exportKey", "Export key"),
   ];
   const top = c.stage === "stopped" ? (live ? A("resume", "Resume") : "") + A("remove", "Remove", "red")
     : c.stage === "dud" || c.stage === "failed" ? A("stop", "Stop") + A("remove", "Remove", "red")
     : A("stop", "Stop", "red");
-
   return `
   <div class="card">
     <div class="coin-head">
       <img src="/img/${esc(c.image)}" alt="">
       <div style="flex:1; min-width:200px">
         <div class="coin-title">${esc(c.name)} <span class="tk">$${esc(c.symbol)}</span></div>
-        <div class="sub"><span class="pill ${pc}">${pl}</span><span>#${c.number} · ${isPair(c) ? `<b style="color:var(--lime)">${esc(c.quote.symbol)} pair</b>` : "SOL pair"} · dev buy ${c.devBuySol} SOL${live ? ` · CA ${short(c.mint)}` : ""}</span></div>
+        <div class="csub"><span class="pill ${pc}">${pl}</span>${c.auto ? `<span class="chip lime">autopilot · try ${c.tryNo}</span>` : ""}<span>#${c.number} · ${isPair(c) ? `<b style="color:var(--lime)">${esc(c.quote.symbol)} pair</b>` : "SOL pair"} · dev buy ${c.devBuySol} SOL${live ? ` · CA ${short(c.mint)}` : ""}</span></div>
       </div>
       <div class="row">${top}</div>
     </div>
@@ -348,61 +680,282 @@ function coinCard(c, now) {
   </div>`;
 }
 
+// ---------- render ----------
+const rank = (c) => ({ checks: 0, post: 0, earning: 1, launch: 2, upload: 2, pair: 2, fund: 2, dud: 3, failed: 3, stopped: 4 })[c.stage] ?? 2;
+const ACTIVE = ["fund", "pair", "upload", "launch", "post", "checks", "earning"];
+let coinFilter = "active", brandFilter = "all", ideaSource = "both";
+
+function brandImg(b) { return b.image ? `<img src="/img/${esc(b.image)}" alt="">` : `<div class="noimg">no logo</div>`; }
+function queueList() {
+  const now = Date.now() + skew;
+  const q = state.brands.filter((b) => b.status === "approved");
+  const due = q.filter((b) => b.tries.length).sort((a, b) => (a.nextTryAt ?? 0) - (b.nextTryAt ?? 0));
+  const fresh = q.filter((b) => !b.tries.length).sort((a, b) => a.order - b.order || a.approvedAt - b.approvedAt);
+  return [...due.filter((b) => b.nextTryAt <= now), ...fresh, ...due.filter((b) => b.nextTryAt > now)];
+}
+function queueItem(b, controls) {
+  const now = Date.now() + skew;
+  const when = b.tries.length ? (b.nextTryAt > now ? `retry ${b.tries.length + 1} in ${dur(b.nextTryAt - now)}` : `retry ${b.tries.length + 1} is due`) : "new · first try";
+  return `<div class="qi">${brandImg(b)}<div class="t"><b>${esc(b.name)}</b> <span class="muted">$${esc(b.symbol)}</span><div>${when}${b.word ? ` · word "${esc(b.word)}"` : ""}</div></div>
+    ${controls ? `<div class="row">${!b.tries.length ? `<button class="btn sm" data-b="up" data-id="${b.id}">↑</button><button class="btn sm" data-b="down" data-id="${b.id}">↓</button>` : ""}<button class="btn sm" data-edit="${b.id}">Edit</button><button class="btn sm red" data-b="retire" data-id="${b.id}">Retire</button></div>` : ""}</div>`;
+}
+
+function renderHome(now) {
+  const ap = state.ap;
+  $("#apSwitch").classList.toggle("on", ap.autopilot);
+  $("#apState").textContent = ap.autopilot ? "On - launches approved brands by itself" : "Off - nothing launches by itself";
+  $("#lockSwitch").classList.toggle("on", ap.spendLock);
+  $("#lockState").textContent = ap.spendLock ? "On - no new spending" : "Off - autopilot may fund launches";
+  $("#apStatus").html = `<span class="pulse ${ap.autopilot && !ap.spendLock ? "on" : ""}"></span>&nbsp; ${esc(ap.status)}`;
+  const liveCoins = state.coins.filter((c) => ["post", "checks", "earning"].includes(c.stage));
+  const today = state.coins.filter((c) => c.launchedAt && now - c.launchedAt < 86400000);
+  const t = resData?.total;
+  const todayProfit = resData?.days?.at(-1)?.profit ?? 0;
+  $("#homeStats").html = `
+    <div class="stat"><b>${state.simulate ? "practice" : fmt(state.main.sol)}</b><span>float · main wallet SOL</span></div>
+    <div class="stat"><b>${sgn(todayProfit)}</b><span>profit today</span></div>
+    <div class="stat"><b>${t ? sgn(t.profit) : "-"}</b><span>profit all time</span></div>
+    <div class="stat"><b>${today.length}<span class="dim" style="font-size:14px"> / ${ap.maxLaunchesPerDay}</span></b><span>launches in 24h</span></div>
+    <div class="stat"><b>${liveCoins.length}</b><span>coins live now</span></div>
+    <div class="stat"><b>${t?.launches ? Math.round((t.hits / t.launches) * 100) + "%" : "-"}</b><span>hit rate</span></div>`;
+  const q = queueList().slice(0, 6);
+  $("#homeQueue").html = q.length ? q.map((b) => queueItem(b, false)).join("") : `<div class="empty">Queue is empty. Go to <a href="#" data-go="ideas">Ideas</a> and approve some.</div>`;
+  // to do
+  const todo = [];
+  const ideas = state.brands.filter((b) => b.status === "idea").length;
+  if (ideas) todo.push(["", `${ideas} idea${ideas > 1 ? "s" : ""} waiting for yes / no`, `<button class="btn sm" data-go="ideas">Review</button>`]);
+  if (!queueList().length) todo.push(["a", "Launch queue is empty", `<button class="btn sm" data-go="ideas">Make ideas</button>`]);
+  for (const c of state.coins.filter((c) => c.mint && !c.posted && ["post", "checks", "earning"].includes(c.stage))) todo.push(["a", `Post ${esc(c.name)} on X`, `<button class="btn sm" data-copy="post" data-id="${c.id}">Copy post</button>`]);
+  if (t?.unclaimed > 0.005) todo.push(["", `${fmt(t.unclaimed)} SOL fees waiting on old coins`, `<button class="btn sm" data-go="results">See</button>`]);
+  if (!state.simulate && ap.autopilot && !ap.spendLock && state.main.sol < ap.devBuySol + 0.035) todo.push(["r", `Float is low - send SOL to the main wallet (needs ${fmt(ap.devBuySol + 0.035)} per launch)`, `<button class="btn sm" data-copy="main">Copy address</button>`]);
+  if (!state.pinata && !state.simulate) todo.push(["r", "PINATA_JWT missing - launches can't upload", ""]);
+  if (ap.autopilot && ap.spendLock) todo.push(["a", "Autopilot is on but the spending lock blocks launches", ""]);
+  $("#todo").html = todo.length ? todo.map(([cls, txt, btn]) => `<div><i class="${cls}"></i><span>${txt}</span>${btn}</div>`).join("") : `<div><i></i><span class="muted">All clear.</span></div>`;
+  $("#apLog").html = ap.activity.length ? ap.activity.map((l) => `<div><span class="muted">${clock(l.t)}</span><span>${esc(l.msg)}</span></div>`).join("") : `<div><span></span><span class="muted">Nothing yet</span></div>`;
+  if (resData) barChart($("#homeChart"), resData.days.map((d) => d.profit), resData.days.map((d) => d.day.slice(5)), { signed: true, unit: " SOL" });
+}
+
+function renderLaunches(now) {
+  const list = [...state.coins].filter((c) => coinFilter === "all" || (coinFilter === "active" ? ACTIVE.includes(c.stage) : !ACTIVE.includes(c.stage)))
+    .sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? a.launchAt - b.launchAt : b.createdAt - a.createdAt)).slice(0, 40);
+  $("#coins").html = list.length ? list.map((c) => coinCard(c, now)).join("")
+    : `<div class="card empty">${coinFilter === "active" ? "Nothing running right now." : "No coins here yet."}<br>Turn on the autopilot (Home) or launch one by hand.</div>`;
+}
+
+function notesHtml(b) {
+  const n = b.check?.notes ?? [];
+  let h = n.map((x) => `<div class="${/^no |banned|already|longer|must|someone/.test(x) ? (/weaker/.test(x) ? "meh" : "bad") : ""}">${esc(x)}</div>`).join("");
+  const cl = b.clash;
+  if (!cl || cl.pending) h += `<div class="meh">checking DexScreener…</div>`;
+  else if (cl.ok === null) h += `<div class="meh">${esc(cl.error)}</div>`;
+  else if (cl.ok) h += `<div>no big coin with this name or ticker${cl.list.length ? ` (${cl.list.length} tiny)` : ""}</div>`;
+  else h += `<div class="bad">clash: ${cl.list.filter((x) => x.mcap >= 20000).map((x) => `${esc(x.name)} $${esc(x.symbol)} ($${Math.round(x.mcap / 1000)}k)`).join(", ")}</div>`;
+  return `<div class="notes">${h}</div>`;
+}
+function renderIdeas() {
+  const ideas = state.brands.filter((b) => b.status === "idea");
+  $("#ideaCountLbl").textContent = ideas.length ? `(${ideas.length})` : "";
+  $("#ideaList").html = ideas.length ? ideas.map((b) => `
+    <div class="idea">
+      <div class="row"><span class="chip ${b.source === "you" ? "you" : b.wordKind}">${b.source === "you" ? "your idea" : `${b.wordKind} word · ${esc(b.word)}`}</span><span class="spacer"></span><span class="dim small">${ago(b.createdAt)} ago</span></div>
+      <div class="nm">${esc(b.name)} <span>$${esc(b.symbol)}</span></div>
+      ${b.tagline ? `<div class="tag">${esc(b.tagline)}</div>` : ""}
+      <div class="why">Why now: ${esc(b.why)}</div>
+      ${notesHtml(b)}
+      <div class="row"><button class="btn lime sm" data-edit="${b.id}">Approve…</button><button class="btn sm" data-b="reject" data-id="${b.id}">Reject</button><button class="btn sm ghost" data-b="recheck" data-id="${b.id}">Re-check</button></div>
+    </div>`).join("") : `<div class="card empty" style="grid-column:1/-1">No ideas waiting. Press <b>Generate</b>.</div>`;
+  const q = queueList();
+  $("#queue").html = q.length ? q.map((b) => queueItem(b, true)).join("") : `<div class="empty">Nothing approved yet.</div>`;
+  const STATUS = { idea: "chip", approved: "chip lime", live: "chip hot", runner: "chip safe", retired: "chip", rejected: "chip red" };
+  const rows = state.brands.filter((b) => brandFilter === "all" ? b.status !== "rejected" : brandFilter === "live" ? ["live", "approved"].includes(b.status) : b.status === brandFilter);
+  const coinById = Object.fromEntries(state.coins.map((c) => [c.id, c]));
+  $("#brandTable").html = rows.length ? `<tr><th></th><th>Brand</th><th>Status</th><th>Tries</th><th>Profit</th><th>Source</th><th></th></tr>` + rows.map((b) => {
+    const profit = b.tries.reduce((a, t) => a + (coinById[t.coinId]?.stats?.profit ?? 0), 0);
+    const act = b.status === "rejected" ? `<button class="btn sm" data-b="restore" data-id="${b.id}">Restore</button><button class="btn sm red" data-b="delete" data-id="${b.id}">Delete</button>`
+      : ["retired", "runner"].includes(b.status) ? `<button class="btn sm" data-b="requeue" data-id="${b.id}">Queue again</button>`
+      : b.status === "idea" ? `<button class="btn sm" data-edit="${b.id}">Approve…</button>` : "";
+    return `<tr><td style="width:46px">${b.image ? `<img src="/img/${esc(b.image)}" style="width:32px;height:32px;border-radius:8px;object-fit:cover">` : ""}</td><td><b>${esc(b.name)}</b> <span class="muted">$${esc(b.symbol)}</span></td><td><span class="${STATUS[b.status]}">${b.status}</span></td><td class="mono">${b.tries.length}</td><td class="mono">${b.tries.length ? sgn(profit) : "-"}</td><td class="muted small">${b.source === "you" ? "you" : esc(b.word)}</td><td><div class="row">${act}</div></td></tr>`;
+  }).join("") : `<tr><td class="empty">Nothing here.</td></tr>`;
+}
+
 function render() {
   if (!state) return;
   const now = Date.now() + skew;
   $("#mode").className = "mode " + (state.simulate ? "practice" : "live");
-  $("#mode").textContent = state.simulate ? "PRACTICE MODE - nothing real" : "LIVE - real SOL";
-  const w = [];
-  if (!state.pinata) w.push("Pinata key missing");
-  if (!state.x) w.push("X keys not set (posting is manual)");
-  if (!state.customRpc) w.push("using free public RPC");
-  if (state.site.enabled && !state.site.hostinger) w.push("Hostinger token missing (websites can't get a subdomain)");
-  $("#siteDomain").textContent = "." + state.site.domain;
-  document.querySelector(".sitebox").hidden = !state.site.enabled;
-  $("#logoutBtn").hidden = !state.public;
-  $("#warns").textContent = w.join(" · ");
+  $("#mode").textContent = state.simulate ? "PRACTICE - nothing real" : "LIVE - real SOL";
+  const liveN = state.coins.filter((c) => ["post", "checks"].includes(c.stage)).length;
+  $("#nLive").hidden = !liveN; $("#nLive").textContent = liveN;
+  const ideaN = state.brands.filter((b) => b.status === "idea").length;
+  $("#nIdeas").hidden = !ideaN; $("#nIdeas").textContent = ideaN;
+  $("#sidefoot").html = `<span class="pulse ${state.ap.autopilot && !state.ap.spendLock ? "on" : ""}"></span>&nbsp; autopilot ${state.ap.autopilot ? "on" : "off"}`;
+  if (page === "home") renderHome(now);
+  if (page === "launches") renderLaunches(now);
+  if (page === "ideas") renderIdeas();
+  if (page === "settings") renderSettings();
+}
+
+function renderSettings() {
   $("#mainAddr").textContent = state.main.address;
   $("#mainBal").textContent = state.simulate ? "practice" : fmt(state.main.sol);
+  $("#logoutBtn").hidden = !state.public;
   if (document.activeElement !== $("#withdrawTo") && !$("#withdrawTo").dataset.touched) $("#withdrawTo").value = state.withdrawTo;
-  // live coins first, then upcoming launches soonest first, finished ones last
-  const rank = (c) => ({ checks: 0, post: 0, earning: 1, launch: 2, upload: 2, fund: 2, dud: 3, failed: 3, stopped: 4 })[c.stage] ?? 2;
-  const list = [...state.coins].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? a.launchAt - b.launchAt : b.createdAt - a.createdAt));
-  $("#coins").innerHTML = list.length ? list.map((c) => coinCard(c, now)).join("")
-    : `<div class="card empty">No coins yet.<br>Make the coin's website + X account, then press <b>+ New coin</b>.</div>`;
+  const ok = (b, yes, no) => `<div><i class="${b ? "" : "r"}"></i><span>${b ? yes : no}</span></div>`;
+  $("#conns").html = ok(state.pinata, "Pinata - image + details upload ready", "Pinata key missing (PINATA_JWT)")
+    + ok(state.x, "X keys set - posts the CA after launch", "X keys not set - you post with \"Copy CA post\"")
+    + ok(state.customRpc, "Own Solana RPC set", "Using the free public RPC (slow, limited)")
+    + ok(brainData?.status?.connected ?? true, "Brain feed (PumpPortal) connected", "Brain feed reconnecting");
+}
+function fillApForm() {
+  if (!state) return;
+  const f = $("#apForm");
+  for (const el of f.elements) {
+    if (!el.name || !(el.name in state.ap)) continue;
+    if (el.type === "checkbox") el.checked = !!state.ap[el.name];
+    else el.value = state.ap[el.name];
+  }
+}
+
+// ---------- brain / results / radar ----------
+async function loadBrain() {
+  brainData = await get("/api/brain");
+  if (!brainData || page !== "brain") return;
+  const b = brainData, s = b.status;
+  $("#brainStats").html = `
+    <div class="stat"><b><span class="pulse ${s.connected ? "on" : ""}"></span> ${s.connected ? "live" : "off"}</b><span>feed${s.connected ? ` · ${s.watching} coins watched` : ` · ${esc(s.error || "connecting")}`}</span></div>
+    <div class="stat"><b>${b.day.coins}</b><span>new coins in 24h</span></div>
+    <div class="stat"><b>${b.day.picks}</b><span>bot picks in 24h</span></div>
+    <div class="stat"><b>${b.day.runners}</b><span>runners in 24h</span></div>
+    <div class="stat"><b>${s.trades ? b.day.bots : "off"}</b><span>${s.trades ? "bot wallets known" : "bot wallets · needs a PumpPortal key"}</span></div>
+    <div class="stat"><b>${b.week.days}</b><span>days of data</span></div>`;
+  barChart($("#heatChart"), b.heat.map((h) => h.coins), b.heat.map((h) => clock(h.t)), { color: "#d5f26c", unit: " coins" });
+  const maxLift = Math.max(1, ...b.safe.map((w) => w.lift));
+  $("#safeTable").html = b.safe.length ? `<tr><th>Word</th><th>Lift</th><th>Picks</th><th>6h</th><th>Days beat</th></tr>` + b.safe.map((w) => `<tr><td><b>${esc(w.word)}</b></td><td><div class="row" style="flex-wrap:nowrap"><span class="mono">${w.lift}x</span><div class="wordbar" style="flex:1"><i style="width:${(w.lift / maxLift) * 100}%"></i></div></div></td><td class="mono">${w.hits}/${w.coins}</td><td class="mono">${w.last6}</td><td class="mono">${w.daysBeaten}/${w.days}</td></tr>`).join("")
+    : `<tr><td class="empty">Still learning - safe words show up after a few hours of watching.</td></tr>`;
+  $("#hotList").html = b.hot.length ? b.hot.map((w) => `<span class="chip hot" title="${esc(w.names.join(", "))}">${esc(w.word)} <b>${w.hits}</b>${w.runners ? ` · ${w.runners}🚀` : ""}</span>`).join("") : `<div class="muted">Nothing yet - give it an hour.</div>`;
+  const flag = (c) => `${c.pick ? `<span class="chip bot">bot pick</span> ` : ""}${c.runner ? `<span class="chip safe">ran</span>` : ""}`;
+  $("#watchTable").html = b.watching.length ? `<tr><th>Coin</th><th>Age</th><th>Buyers</th><th>Bots</th><th>MC</th></tr>` + b.watching.map((c) => `<tr><td><a href="https://pump.fun/coin/${c.m}" target="_blank" rel="noopener">${esc(c.n)}</a> <span class="muted small">$${esc(c.s)}</span></td><td class="mono">${ago(c.t)}</td><td class="mono">${c.buyers}</td><td class="mono">${c.botBuys ? `<span style="color:var(--violet)">${c.botBuys}</span>` : 0}</td><td class="mono">${c.peak}</td></tr>`).join("") : `<tr><td class="empty">Waiting for new coins…</td></tr>`;
+  $("#recentTable").html = b.recent.length ? `<tr><th>Coin</th><th>Buyers</th><th>Vol</th><th>Peak MC</th><th></th></tr>` + b.recent.slice(0, 15).map((c) => `<tr><td>${esc(c.n)} <span class="muted small">$${esc(c.s)}</span></td><td class="mono">${c.buyers}</td><td class="mono">${c.vol}</td><td class="mono">${c.peak}</td><td>${flag(c)}</td></tr>`).join("") : `<tr><td class="empty">Coins appear here after their first 10 minutes.</td></tr>`;
+}
+async function loadResults() {
+  resData = await get("/api/results");
+  if (!resData) return;
+  if (page === "home") return render();
+  if (page !== "results") return;
+  const t = resData.total;
+  $("#resStats").html = `
+    <div class="stat"><b>${sgn(t.profit)}</b><span>total profit (SOL)</span></div>
+    <div class="stat"><b>${t.launches}</b><span>launches</span></div>
+    <div class="stat"><b>${t.hits}</b><span>hits (passed the check)</span></div>
+    <div class="stat"><b>${fmt(t.fees)}</b><span>creator fees (SOL)</span></div>
+    <div class="stat"><b>${t.launches ? sgn(t.profit / t.launches, 4) : "-"}</b><span>profit per launch</span></div>
+    <div class="stat"><b>${fmt(t.unclaimed)}</b><span>fees not claimed yet</span></div>`;
+  barChart($("#resChart"), resData.days.map((d) => d.profit), resData.days.map((d) => d.day.slice(5)), { signed: true, unit: " SOL" });
+  const grp = (g) => `<tr><td>${esc(g.label)}</td><td class="mono">${g.launches}</td><td class="mono">${g.hits}</td><td class="mono">${sgn(g.perLaunch, 4)}</td><td class="mono">${sgn(g.profit)}</td></tr>`;
+  const gh = `<tr><th>Name</th><th>Launches</th><th>Hits</th><th>Per launch</th><th>Total</th></tr>`;
+  $("#byBrand").html = resData.byBrand.length ? gh + resData.byBrand.map(grp).join("") : `<tr><td class="empty">No launches yet.</td></tr>`;
+  $("#byPair").html = resData.byPair.length ? gh.replace("Name", "Setting") + resData.byPair.map(grp).join("") : `<tr><td class="empty">No launches yet.</td></tr>`;
+  $("#resTable").html = resData.rows.length ? `<tr><th>When</th><th>Coin</th><th>Try</th><th>Wallets</th><th>Volume</th><th>Fees</th><th>Peak</th><th>Profit</th><th></th></tr>` + resData.rows.slice(0, 200).map((r) => `<tr><td class="muted small">${dayTime(r.launchedAt)}</td><td><a href="https://pump.fun/coin/${r.mint}" target="_blank" rel="noopener">${esc(r.name)}</a> <span class="muted small">$${esc(r.symbol)}</span></td><td class="mono">${r.try}</td><td class="mono">${r.wallets}</td><td class="mono">${fmt(r.volume, 2)}</td><td class="mono">${fmt(r.fees)}</td><td class="mono">${fmt(r.peakX, 2)}x</td><td class="mono">${sgn(r.profit)}</td><td>${r.hit ? `<span class="chip safe">hit</span>` : `<span class="chip">${esc(r.stage)}</span>`}</td></tr>`).join("") : `<tr><td class="empty">No launches yet.</td></tr>`;
+  $("#unclaimed").html = resData.unclaimed.length ? `<tr><th>Coin</th><th>Waiting</th><th></th></tr>` + resData.unclaimed.map((r) => `<tr><td>${esc(r.name)} <span class="muted small">$${esc(r.symbol)}</span></td><td class="mono">${fmt(r.unclaimed, 4)} SOL</td><td><button class="btn sm" data-act="claim" data-id="${r.id}">Claim</button></td></tr>`).join("") : `<tr><td class="empty">Nothing waiting.</td></tr>`;
+}
+async function loadRadar() {
+  radarData = await get("/api/radar");
+  if (!radarData || page !== "radar") return;
+  const r = radarData;
+  $("#radarStats").html = `
+    <div class="stat"><b>${r.total}</b><span>outside wallets seen</span></div>
+    <div class="stat"><b>${r.repeat}</b><span>bought 2+ of your coins</span></div>
+    <div class="stat"><b>${r.snipers}</b><span>block-0 snipers</span></div>
+    <div class="stat"><b>${r.marketBots.length}</b><span>market bots (brain)</span></div>`;
+  const tagCls = (l) => /sniper/.test(l) ? "chip red" : /Bundler/.test(l) ? "chip hot" : /Market/.test(l) ? "chip bot" : "chip";
+  $("#radarTable").html = r.wallets.length ? `<tr><th>Wallet</th><th>Name</th><th>Tags</th><th>Coins</th><th>Bought</th><th>Sold</th><th>Fastest</th></tr>` + r.wallets.map((w) => `<tr>
+    <td><a class="mono" href="https://solscan.io/account/${w.wallet}" target="_blank" rel="noopener">${short(w.wallet)}</a></td>
+    <td><button class="btn sm ghost" data-name="${w.wallet}" data-label="${esc(w.label)}">${w.label ? esc(w.label) : `<span class="dim">+ name</span>`}</button></td>
+    <td><div class="row">${w.labels.map((l) => `<span class="${tagCls(l)}">${esc(l)}</span>`).join("")}</div></td>
+    <td class="mono" title="${esc(w.names.join(", "))}">${w.coins}</td><td class="mono">${fmt(w.bought)}</td><td class="mono">${fmt(w.sold)}</td><td class="mono">${w.fastest === null ? "-" : w.fastest + "s"}</td></tr>`).join("")
+    : `<tr><td class="empty">No buyers yet - wallets show up after your first launch.</td></tr>`;
+  $("#marketBots").html = r.marketBots.length ? `<tr><th>Wallet</th><th>Early buys (24h)</th><th>Last seen</th></tr>` + r.marketBots.map((w) => `<tr><td><a class="mono" href="https://solscan.io/account/${w.wallet}" target="_blank" rel="noopener">${short(w.wallet)}</a></td><td class="mono">${w.coins} coins</td><td class="muted">${ago(w.last)} ago</td></tr>`).join("") : `<tr><td class="empty">The brain is still learning.</td></tr>`;
 }
 
 async function load() {
   try {
     const r = await fetch("/api/state");
-    if (r.status === 401) return void (location.href = "/login"); // logged out
+    if (r.status === 401) return void (location.href = "/login");
     state = await r.json();
     skew = state.now - Date.now();
     render();
   } catch {
-    $("#mode").textContent = "Not connected - is the black AUTOPILOT window open?";
+    $("#mode").className = "mode practice";
+    $("#mode").textContent = "Not connected";
   }
 }
 load();
-setInterval(load, 2000);
+setInterval(load, 2500);
 setInterval(render, 1000);
+setInterval(() => { if (page === "brain") loadBrain(); if (page === "results" || page === "home") loadResults(); if (page === "radar") loadRadar(); }, 10000);
+try { const p = localStorage.getItem("ap-page"); if (p && PAGES[p]) setTimeout(() => go(p), 0); } catch {}
+loadResults();
 
-// details open/closed survives the refresh
 document.addEventListener("toggle", (e) => {
   const id = e.target.dataset?.d;
   if (id) e.target.open ? openDetails.add(id) : openDetails.delete(id);
 }, true);
 
-const CONFIRM = {
-  sell: "Sell the whole dev bag now?",
-  dud: "Mark as dud? If auto-sell is on, the dev bag is sold and SOL goes back to the main wallet.",
-  withdraw: "Send all SOL in this coin's fresh wallet back to the main wallet?",
-  stop: "Stop this coin? (Before launch: it won't launch. After launch: it stops watching.)",
-  remove: "Remove this coin from the list? (Its keys stay saved in data/keys.json.)",
-  launchNow: "Launch this coin right now?",
+// ---------- switches ----------
+async function setAp(body, msg) {
+  try { await post("/api/autopilot", { ...body, tzOffset: new Date().getTimezoneOffset() }); toast(msg); load(); } catch (err) { toast(err.message); }
+}
+$("#apSwitch").onclick = () => {
+  const on = !state.ap.autopilot;
+  if (on && !state.simulate && !confirm("Turn the autopilot ON? It will launch approved brands with real SOL from the main wallet (unless the spending lock is on).")) return;
+  setAp({ autopilot: on }, on ? "Autopilot on" : "Autopilot off");
+};
+$("#lockSwitch").onclick = () => {
+  const on = !state.ap.spendLock;
+  if (!on && !state.simulate && !confirm(`Turn the spending lock OFF? Autopilot may then spend up to ${state.ap.devBuySol} SOL + fees per launch, ${state.ap.maxLaunchesPerDay} launches a day.`)) return;
+  setAp({ spendLock: on }, on ? "Spending lock on" : "Spending lock off");
+};
+$("#apForm").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#apErr").textContent = "";
+  const body = {};
+  for (const el of e.target.elements) if (el.name) body[el.name] = el.type === "checkbox" ? el.checked : Number(el.value);
+  try { await post("/api/autopilot", { ...body, tzOffset: new Date().getTimezoneOffset() }); toast("Rules saved"); load(); }
+  catch (err) { $("#apErr").textContent = err.message; }
 };
 
+// ---------- buttons ----------
+const CONFIRM = {
+  sell: "Sell the whole dev bag now?", dud: "Mark as dud? If auto-sell is on, the dev bag is sold and SOL goes back to the main wallet.",
+  withdraw: "Send all SOL in this coin's fresh wallet back to the main wallet?", stop: "Stop this coin? (Before launch: it won't launch. After launch: it stops watching.)",
+  remove: "Remove this coin from the list? (Its keys stay saved.)", launchNow: "Launch this coin right now?",
+};
+const BCONFIRM = { retire: "Retire this brand? It won't be launched again.", delete: "Delete this idea for good?", reject: null };
 document.addEventListener("click", async (e) => {
+  const g = e.target.closest("[data-go]");
+  if (g) { e.preventDefault(); return go(g.dataset.go); }
+  const f = e.target.closest("#coinFilter button, #brandFilter button, #ideaSource button");
+  if (f) {
+    f.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === f));
+    if (f.dataset.f && f.closest("#coinFilter")) coinFilter = f.dataset.f;
+    if (f.dataset.f && f.closest("#brandFilter")) brandFilter = f.dataset.f;
+    if (f.dataset.s) ideaSource = f.dataset.s;
+    return render();
+  }
+  const ed = e.target.closest("[data-edit]");
+  if (ed) return openApprove(ed.dataset.edit);
+  const bb = e.target.closest("[data-b]");
+  if (bb) {
+    if (BCONFIRM[bb.dataset.b] && !confirm(BCONFIRM[bb.dataset.b])) return;
+    try { await post("/api/brand", { id: bb.dataset.id, action: bb.dataset.b }); load(); } catch (err) { toast(err.message); }
+    return;
+  }
+  const nm = e.target.closest("[data-name]");
+  if (nm) {
+    const label = prompt("Name this wallet (empty = remove the name):", nm.dataset.label || "");
+    if (label === null) return;
+    try { await post("/api/wallet-name", { wallet: nm.dataset.name, label }); loadRadar(); } catch (err) { toast(err.message); }
+    return;
+  }
   const b = e.target.closest("[data-act],[data-copy]");
   if (!b) return;
   const c = state?.coins.find((x) => x.id === b.dataset.id);
@@ -418,84 +971,144 @@ document.addEventListener("click", async (e) => {
   b.disabled = true;
   try {
     const r = await post("/api/action", { id: b.dataset.id, action });
-    if (r.key) {
-      await navigator.clipboard.writeText(r.key);
-      toast("Private key copied - paste it into Phantom > Add wallet > Import private key");
-    } else toast("Done");
+    if (r.key) { await navigator.clipboard.writeText(r.key); toast("Private key copied - Phantom > Add wallet > Import private key"); }
+    else toast("Done");
     load();
-  } catch (err) {
-    toast(err.message);
-  } finally {
-    b.disabled = false;
-  }
+  } catch (err) { toast(err.message); } finally { b.disabled = false; }
 });
 
-// ---------- New coin form ----------
-const form = $("#form");
-function pad(n) { return String(n).padStart(2, "0"); }
-function defaultTime() {
-  const d = new Date(Date.now() + 30 * 60000);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// ---------- ideas ----------
+$("#genBtn").onclick = async () => {
+  const btn = $("#genBtn");
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
+  try { const r = await post("/api/ideas", { count: Number($("#ideaCount").value), source: ideaSource }); toast(`${r.made} new idea${r.made > 1 ? "s" : ""}`); load(); }
+  catch (err) { toast(err.message); } finally { btn.disabled = false; btn.textContent = "Generate"; }
+};
+$("#ownBtn").onclick = () => { const f = $("#ownForm"); f.style.display = f.style.display === "none" ? "" : "none"; };
+$("#ownForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try { await post("/api/brand", { action: "new", name: fd.get("name"), symbol: fd.get("symbol"), description: fd.get("description") }); e.target.reset(); e.target.style.display = "none"; toast("Idea added"); load(); }
+  catch (err) { toast(err.message); }
+};
+
+// ---------- logo maker: dark or light ground, faint dot grid, one cream mark, one accent dot, no words ----------
+const GROUNDS = [["#121212", "#ece4d6"], ["#0f1114", "#ece4d6"], ["#161616", "#ece4d6"], ["#f3f2ee", "#1b1b1b"], ["#1e3a2b", "#ece4d6"], ["#1b2742", "#ece4d6"], ["#c75b39", "#f6efe3"]];
+const ACCENTS = ["#f5b43a", "#22c97f", "#9be35a", "#2ec4b6", "#5aa9ff", "#ff6b8a", "#d5f26c"];
+function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function hash(str) { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; }
+let logoSeed = 0, ownLogoFile = null;
+function drawLogo(name, seed) {
+  const cv = $("#logoCanvas"), g = cv.getContext("2d"), S = 512, r = rng(hash(name) + seed * 7919);
+  const [bg, ink] = GROUNDS[Math.floor(r() * GROUNDS.length)];
+  let acc = ACCENTS[Math.floor(r() * ACCENTS.length)];
+  if (bg === "#c75b39" || bg === "#1e3a2b") acc = "#f5b43a";
+  g.fillStyle = bg; g.fillRect(0, 0, S, S);
+  g.fillStyle = ink; g.globalAlpha = 0.07;
+  for (let x = 16; x < S; x += 24) for (let y = 16; y < S; y += 24) { g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+  const c = S / 2, lw = 34;
+  g.strokeStyle = ink; g.fillStyle = ink; g.lineWidth = lw; g.lineCap = "round"; g.lineJoin = "round";
+  const dot = (x, y, rad = 26) => { g.fillStyle = acc; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill(); g.fillStyle = ink; };
+  const shape = Math.floor(r() * 9);
+  g.beginPath();
+  if (shape === 0) { g.arc(c, c, 120, 0.25 * Math.PI, 1.9 * Math.PI); g.stroke(); dot(c + 120 * Math.cos(0.25 * Math.PI) + 10, c + 120 * Math.sin(0.25 * Math.PI) + 10); }
+  else if (shape === 1) { g.roundRect(c - 115, c - 115, 230, 230, 56); g.stroke(); dot(c, c); }
+  else if (shape === 2) { g.moveTo(c - 125, c + 95); g.lineTo(c, c - 120); g.lineTo(c + 125, c + 95); g.closePath(); g.stroke(); dot(c, c + 30, 24); }
+  else if (shape === 3) { for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(c - 110 + i * 70, c - 100); g.lineTo(c - 40 + i * 70, c); g.lineTo(c - 110 + i * 70, c + 100); g.stroke(); } dot(c + 130, c, 22); }
+  else if (shape === 4) { g.moveTo(c - 120, c + 80); g.quadraticCurveTo(c - 120, c - 110, c, c - 110); g.quadraticCurveTo(c + 120, c - 110, c + 120, c + 80); g.stroke(); dot(c, c + 80, 30); }
+  else if (shape === 5) { g.moveTo(c, c - 135); g.lineTo(c + 135, c); g.lineTo(c, c + 135); g.lineTo(c - 135, c); g.closePath(); g.stroke(); dot(c + 135, c, 24); }
+  else if (shape === 6) { [[-90, 60], [0, -10], [90, -80]].forEach(([dx, h]) => { g.beginPath(); g.moveTo(c + dx, c + 110); g.lineTo(c + dx, c + h); g.stroke(); }); dot(c + 90, c - 135, 24); }
+  else if (shape === 7) { for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; i ? g.lineTo(c + 125 * Math.cos(a), c + 125 * Math.sin(a)) : g.moveTo(c + 125 * Math.cos(a), c + 125 * Math.sin(a)); } g.closePath(); g.stroke(); dot(c, c, 30); }
+  else { g.arc(c - 50, c, 85, 0, 7); g.stroke(); g.beginPath(); g.arc(c + 60, c, 85, -1.1, 1.1); g.stroke(); dot(c + 145, c - 30, 22); }
 }
-$("#newBtn").onclick = () => { form.classList.add("open"); $("#whenAt").value ||= defaultTime(); form.scrollIntoView({ behavior: "smooth" }); };
+function openApprove(id) {
+  const b = state.brands.find((x) => x.id === id);
+  if (!b) return;
+  const f = $("#approveForm");
+  f.dataset.id = id;
+  for (const k of ["name", "symbol", "description", "website", "twitter", "telegram", "xPost"]) f.elements[k].value = b[k] ?? "";
+  $("#mTitle").textContent = b.status === "idea" ? `Approve ${b.name}` : `Edit ${b.name}`;
+  $("#mSave").textContent = b.status === "approved" ? "Save" : "Approve + add to queue";
+  $("#mErr").textContent = "";
+  ownLogoFile = null;
+  logoSeed = 0;
+  if (b.image) {
+    const img = new Image();
+    img.onload = () => { const g = $("#logoCanvas").getContext("2d"); g.clearRect(0, 0, 512, 512); g.drawImage(img, 0, 0, 512, 512); };
+    img.src = `/img/${b.image}`;
+    f.dataset.keep = "1";
+    $("#logoNote").textContent = "Current logo. Shuffle or upload to change it.";
+  } else {
+    f.dataset.keep = "";
+    drawLogo(b.name, 0);
+    $("#logoNote").textContent = "Made for you - flat mark, one accent, no words.";
+  }
+  $("#modal").classList.add("open");
+}
+const closeModal = () => $("#modal").classList.remove("open");
+$("#mClose").onclick = closeModal; $("#mCancel").onclick = closeModal;
+$("#modal").onclick = (e) => { if (e.target.id === "modal") closeModal(); };
+$("#shuffleLogo").onclick = () => { ownLogoFile = null; $("#approveForm").dataset.keep = ""; drawLogo($("#approveForm").elements.name.value || "x", ++logoSeed); $("#logoNote").textContent = `Made for you - version ${logoSeed + 1}.`; };
+$("#ownLogo").onchange = () => {
+  const file = $("#ownLogo").files[0];
+  if (!file) return;
+  ownLogoFile = file;
+  $("#approveForm").dataset.keep = "";
+  const img = new Image();
+  img.onload = () => { const g = $("#logoCanvas").getContext("2d"); g.clearRect(0, 0, 512, 512); g.drawImage(img, 0, 0, 512, 512); URL.revokeObjectURL(img.src); };
+  img.src = URL.createObjectURL(file);
+  $("#logoNote").textContent = `Your logo: ${file.name}`;
+};
+$("#approveForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const fd = new FormData(f);
+  fd.set("id", f.dataset.id);
+  if (ownLogoFile) fd.set("image", ownLogoFile);
+  else if (!f.dataset.keep) fd.set("image", await new Promise((res) => $("#logoCanvas").toBlob(res, "image/png")), "logo.png");
+  $("#mSave").disabled = true;
+  try {
+    const r = await fetch("/api/brand-approve", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    closeModal();
+    toast("Saved - it's in the launch queue");
+    load();
+  } catch (err) { $("#mErr").textContent = err.message; } finally { $("#mSave").disabled = false; }
+};
+
+// ---------- manual coin form ----------
+const form = $("#form");
+const pad = (n) => String(n).padStart(2, "0");
+function defaultTime() { const d = new Date(Date.now() + 30 * 60000); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+$("#newBtn").onclick = () => { form.classList.add("open"); $("#whenAt").value ||= defaultTime(); $("#siteDomain").textContent = "." + state.site.domain; form.querySelector(".sitebox").hidden = !state.site.enabled; form.scrollIntoView({ behavior: "smooth" }); };
 $("#cancelBtn").onclick = () => form.classList.remove("open");
-// website fields: subdomain follows the ticker, color is picked from the logo
 const ticker = form.elements.symbol;
 ticker.addEventListener("input", () => { if (!$("#sub").dataset.touched) $("#sub").value = ticker.value.toLowerCase().replace(/[^a-z0-9-]/g, ""); });
 $("#sub").addEventListener("input", () => ($("#sub").dataset.touched = "1"));
 $("#makeSite").onchange = () => { $("#siteFields").style.display = $("#makeSite").checked ? "" : "none"; };
-form.elements.image.addEventListener("change", () => {
-  const file = form.elements.image.files[0];
-  if (!file) return;
-  const img = new Image();
-  img.onload = () => {
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = 40;
-    const g = cv.getContext("2d");
-    g.drawImage(img, 0, 0, 40, 40);
-    const d = g.getImageData(0, 0, 40, 40).data;
-    // the most colorful bright pixels win, so dark backgrounds and white outlines are ignored
-    let best = null, bestScore = -1;
-    const buckets = {};
-    for (let i = 0; i < d.length; i += 4) {
-      const [r, gg, b] = [d[i], d[i + 1], d[i + 2]];
-      const max = Math.max(r, gg, b), min = Math.min(r, gg, b);
-      if (d[i + 3] < 128 || max < 70 || max - min < 50) continue;
-      const key = `${r >> 5},${gg >> 5},${b >> 5}`;
-      const k = (buckets[key] ??= { n: 0, r: 0, g: 0, b: 0 });
-      k.n++; k.r += r; k.g += gg; k.b += b;
-      const score = k.n * (max - min);
-      if (score > bestScore) { bestScore = score; best = k; }
-    }
-    if (best) $("#accent").value = "#" + [best.r, best.g, best.b].map((v) => Math.round(v / best.n).toString(16).padStart(2, "0")).join("");
-    URL.revokeObjectURL(img.src);
-  };
-  img.src = URL.createObjectURL(file);
-});
-// ---------- Pair picker: every token Pump.fun accepts, searchable ----------
 let pairs = [];
 function showPairs() {
   const q = $("#pairSearch").value.trim().toLowerCase();
   const keep = $("#pairSelect").value;
   const list = pairs.filter((p) => !q || p.symbol.toLowerCase().includes(q) || p.mint.toLowerCase() === q);
-  $("#pairSelect").innerHTML = list.map((p) => `<option value="${p.mint}">${esc(p.symbol)}${p.mint === SOL_MINT ? " (normal)" : ""}</option>`).join("");
+  $("#pairSelect").html = list.map((p) => `<option value="${p.mint}">${esc(p.symbol)}${p.mint === SOL_MINT ? " (normal)" : ""}</option>`).join("");
   if (list.some((p) => p.mint === keep)) $("#pairSelect").value = keep;
   pairNote();
 }
 function pairNote() {
   const p = pairs.find((x) => x.mint === $("#pairSelect").value);
-  $("#pairNote").textContent = !p || p.mint === SOL_MINT ? "" : `Your dev buy is swapped into ${p.symbol} first, and sales are swapped back to SOL (small swap fees). Funding adds 0.02 SOL.`;
+  $("#pairNote").textContent = !p || p.mint === SOL_MINT ? "" : `Your dev buy is swapped into ${p.symbol} first, and sales are swapped back to SOL. Funding adds 0.02 SOL.`;
 }
 $("#pairSearch").oninput = showPairs;
 $("#pairSelect").onchange = pairNote;
 $("#newBtn").addEventListener("click", async () => {
   if (pairs.length) return;
-  try {
-    pairs = await (await fetch("/api/pairs")).json();
-    showPairs();
-  } catch { $("#pairNote").textContent = "Couldn't load the pair list - SOL only for now."; }
+  try { pairs = await (await fetch("/api/pairs")).json(); showPairs(); } catch { $("#pairNote").textContent = "Couldn't load the pair list - SOL only for now."; }
 });
-$("#when").onchange =() => { $("#whenAt").style.visibility = $("#when").value === "at" ? "visible" : "hidden"; };
+$("#when").onchange = () => { $("#whenAt").style.visibility = $("#when").value === "at" ? "visible" : "hidden"; };
 form.onsubmit = async (e) => {
   e.preventDefault();
   $("#formErr").textContent = "";
@@ -511,68 +1124,33 @@ form.onsubmit = async (e) => {
     const r = await fetch("/api/coins", { method: "POST", body: fd });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
-    form.reset();
-    $("#pairSearch").value = "";
-    if (pairs.length) showPairs();
-    delete $("#sub").dataset.touched;
+    form.reset(); $("#pairSearch").value = ""; if (pairs.length) showPairs(); delete $("#sub").dataset.touched;
     form.classList.remove("open");
-    toast(`${j.name} added to autopilot`);
+    toast(`${j.name} added`);
     load();
-  } catch (err) {
-    $("#formErr").textContent = err.message;
-  } finally {
-    $("#addBtn").disabled = false;
-  }
+  } catch (err) { $("#formErr").textContent = err.message; } finally { $("#addBtn").disabled = false; }
 };
 
-// ---------- Backup / restore / log out ----------
-$("#backupBtn").onclick = (e) => {
-  if (!confirm("The backup file holds the PRIVATE KEYS of every wallet. Keep it safe and never send it to anyone. Download it?")) e.preventDefault();
-};
+// ---------- wallet / backup ----------
+$("#backupBtn").onclick = (e) => { if (!confirm("The backup file holds the PRIVATE KEYS of every wallet. Keep it safe and never send it to anyone. Download it?")) e.preventDefault(); };
 $("#restoreFile").onchange = async () => {
   const f = $("#restoreFile").files[0];
   $("#restoreFile").value = "";
   if (!f || !confirm(`Restore ${f.name}? This replaces this AUTOPILOT's (empty) main wallet with the one in the backup.`)) return;
-  try {
-    await post("/api/restore", JSON.parse(await f.text()));
-    toast("Restored - restarting, the page reloads in 15 seconds");
-    setTimeout(() => location.reload(), 15000);
-  } catch (err) { toast(err.message); }
+  try { await post("/api/restore", JSON.parse(await f.text())); toast("Restored - restarting, the page reloads in 15 seconds"); setTimeout(() => location.reload(), 15000); } catch (err) { toast(err.message); }
 };
 $("#exportMain").onclick = async () => {
   if (!confirm("Copy the MAIN WALLET's PRIVATE KEY? Only paste it into your own Phantom. Anyone who sees it can take all the SOL.")) return;
   let password = "";
-  if (state.public) {
-    password = prompt("Type your AUTOPILOT password again:");
-    if (!password) return;
-  }
-  try {
-    const r = await post("/api/export-main", { password });
-    await navigator.clipboard.writeText(r.key).catch(() => prompt("Copy your private key:", r.key));
-    toast("Private key copied - Phantom > Add wallet > Import private key");
-  } catch (err) { toast(err.message); }
+  if (state.public) { password = prompt("Type your AUTOPILOT password again:"); if (!password) return; }
+  try { const r = await post("/api/export-main", { password }); await navigator.clipboard.writeText(r.key).catch(() => prompt("Copy your private key:", r.key)); toast("Private key copied - Phantom > Add wallet > Import private key"); } catch (err) { toast(err.message); }
 };
-$("#logoutBtn").onclick = async () => {
-  await post("/api/logout", {}).catch(() => {});
-  location.href = "/login";
-};
-
-// ---------- Main wallet ----------
+$("#logoutBtn").onclick = async () => { await post("/api/logout", {}).catch(() => {}); location.href = "/login"; };
 $("#withdrawTo").oninput = () => ($("#withdrawTo").dataset.touched = "1");
-$("#saveTo").onclick = async () => {
-  try {
-    await post("/api/settings", { withdrawTo: $("#withdrawTo").value });
-    delete $("#withdrawTo").dataset.touched;
-    toast("Saved");
-  } catch (err) { toast(err.message); }
-};
+$("#saveTo").onclick = async () => { try { await post("/api/settings", { withdrawTo: $("#withdrawTo").value }); delete $("#withdrawTo").dataset.touched; toast("Saved"); } catch (err) { toast(err.message); } };
 $("#withdrawMain").onclick = async () => {
   if (!confirm(`Send ALL SOL in the main wallet to ${state.withdrawTo || "(not saved)"}?`)) return;
-  try {
-    const r = await post("/api/withdraw-main", {});
-    toast(`Sent ${fmt(r.sent, 4)} SOL`);
-    load();
-  } catch (err) { toast(err.message); }
+  try { const r = await post("/api/withdraw-main", {}); toast(`Sent ${fmt(r.sent, 4)} SOL`); load(); } catch (err) { toast(err.message); }
 };
 </script>
 </body>

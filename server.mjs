@@ -22,6 +22,8 @@ import {
 } from "@pump-fun/pump-sdk";
 import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs";
 import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
+import { createBrain } from "./brain.mjs";
+import { checkClash, checkName, makeIdeas } from "./ideas.mjs";
 
 const PORT = Number(process.env.PORT || 3480);
 const SIMULATE = process.env.SIMULATE !== "0"; // practice mode until you set SIMULATE=0 in .env
@@ -55,6 +57,7 @@ const PRIORITY = { launch: 1_000_000, normal: 200_000 }; // micro-lamports per c
 const COIN_RESERVE_LAMPORTS = 3_000_000; // 0.003 SOL stays in each coin wallet so it can keep paying to claim creator fees
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
 async function retry(fn, tries = 4) {
   for (let i = 0; ; i++) {
     try {
@@ -120,7 +123,37 @@ const mainWallet = Keypair.fromSecretKey(Uint8Array.from(mainSecret));
 const keys = readSecret("keys.json", {});
 writeSecret("keys.json", keys);
 const coins = readJson("coins.json", []);
-const settings = { withdrawTo: "", ...readJson("settings.json", {}) };
+// Autopilot settings (the scheduler) - safe defaults: autopilot off, spending lock on.
+const AP_DEFAULTS = {
+  autopilot: false, spendLock: true, devBuySol: 0.5, leadMinutes: 3, minGapMinutes: 30, triesPerDay: 2, retryGapMinutes: 240,
+  maxDays: 2, maxLaunchesPerDay: 10, windowStart: 0, windowEnd: 24, tzOffset: 0, checkMinutes: 5, minWallets: 15,
+  takeProfitX: 2, autoClaimSol: 0.02, autoSweep: false, floatTarget: 1.5, sweepAbove: 0.5,
+};
+const settings = { withdrawTo: "", walletNames: {}, ...AP_DEFAULTS, ...readJson("settings.json", {}) };
+const brands = readJson("brands.json", []); // coin ideas -> approved queue -> live -> runner / retired
+const activity = readJson("activity.json", []); // autopilot's own log
+const brain = createBrain(DATA, { apiKey: (process.env.PUMPPORTAL_API_KEY || "").trim(), readCurves });
+
+/** Market cap (in SOL) of many Pump.fun coins at once, read from their bonding curves. Graduated = 400. */
+async function readCurves(mints) {
+  const out = new Map();
+  for (let i = 0; i < mints.length; i += 100) {
+    const part = mints.slice(i, i + 100);
+    const infos = await retry(() => rpc.getMultipleAccountsInfo(part.map((m) => bondingCurvePda(new PublicKey(m)))), 3);
+    infos.forEach((info, j) => {
+      if (!info) return;
+      try {
+        const c = PUMP_SDK.decodeBondingCurve(info);
+        const q = c.quoteMint?.toBase58?.() ?? SOL_MINT;
+        if (q !== SOL_MINT && q !== "11111111111111111111111111111111") return; // pair coins aren't priced in SOL
+        const mc = c.complete ? 400 : (c.virtualQuoteReserves.toNumber() / 1e9) * (c.tokenTotalSupply.toNumber() / c.virtualTokenReserves.toNumber());
+        if (Number.isFinite(mc)) out.set(part[j], +mc.toFixed(1));
+      } catch {}
+    });
+    await sleep(300);
+  }
+  return out;
+}
 for (const c of coins) {
   // a website build that was running when AUTOPILOT closed never finished
   if (c.site?.status === "building") c.site = { status: "failed", error: "AUTOPILOT was closed while building - press Rebuild website" };
@@ -132,8 +165,16 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     writeJson("coins.json", coins);
+    writeJson("brands.json", brands);
+    writeJson("activity.json", activity);
     writeSecret("keys.json", keys);
   }, 300);
+}
+function apLog(msg) {
+  activity.unshift({ t: Date.now(), msg });
+  activity.length = Math.min(activity.length, 150);
+  console.log(`[autopilot] ${msg}`);
+  save();
 }
 const keypair = (k) => Keypair.fromSecretKey(Uint8Array.from(keys[k]));
 
@@ -281,6 +322,7 @@ function simTrade(c, sol) {
   return tokens;
 }
 const fakeAddr = () => Keypair.generate().publicKey.toBase58();
+const SIM_BOTS = Array.from({ length: 8 }, fakeAddr); // practice bot group that shows up on many coins
 
 function simTick(c) {
   const s = simCurve(c);
@@ -288,9 +330,14 @@ function simTick(c) {
   const chance = s.crowd * Math.max(0.15, 1 - mins / 40);
   const trades = [];
   const slot = Math.floor(Date.now() / 400);
+  if (!s.sniped) {
+    // practice snipers: 2-4 of the same bot wallets buy in the launch block
+    s.sniped = true;
+    for (const w of [...SIM_BOTS].sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 3))) trades.push({ wallet: w, sol: +(0.2 + Math.random() * 0.8).toFixed(3), slot });
+  }
   if (Math.random() < 0.06 * s.crowd) {
     // a sniper bundle: several wallets buy in the same block
-    for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) trades.push({ wallet: fakeAddr(), sol: +(0.1 + Math.random() * 0.6).toFixed(3), slot });
+    for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) trades.push({ wallet: Math.random() < 0.3 ? pickOne(SIM_BOTS) : fakeAddr(), sol: +(0.1 + Math.random() * 0.6).toFixed(3), slot });
   }
   if (Math.random() < chance) {
     const known = c.stats.walletList ?? [];
@@ -310,6 +357,13 @@ function addTrade(c, t) {
   st.trades.unshift(t);
   st.trades.length = Math.min(st.trades.length, 40);
   if (t.wallet === c.wallet) return; // our own buys/sells are not "outside"
+  // bot radar: who bought, how fast after launch, how much (first 400 wallets per coin)
+  st.buyers ??= {};
+  if (st.buyers[t.wallet] || (t.sol > 0 && Object.keys(st.buyers).length < 400)) {
+    const b = (st.buyers[t.wallet] ??= { first: t.t, slot: t.slot, buy: 0, sell: 0 });
+    if (t.sol > 0) b.buy = +(b.buy + t.sol).toFixed(4);
+    else b.sell = +(b.sell - t.sol).toFixed(4);
+  }
   st.walletList ??= [];
   if (t.sol > 0 && !st.walletList.includes(t.wallet)) st.walletList.push(t.wallet);
   st.outsideWallets = st.walletList.length;
@@ -753,13 +807,14 @@ async function step(c) {
         c.soldAt = now;
         log(c, `Hit ${tp}x - sold dev bag for ${got.toFixed(4)} SOL`);
         log(c, `Withdrew ${(await withdrawCoin(c)).toFixed(4)} SOL to main wallet (kept 0.003 so fees can still be claimed)`);
-        if (c.stage === "checks") c.stage = "earning";
+        if (c.stage === "checks") Object.assign(c, { stage: "earning", passed: true });
         await refreshMoney(c);
       }
 
       if (c.stage === "checks" && now >= c.launchedAt + c.checkMinutes * 60_000) {
         if (c.stats.outsideWallets >= c.minWallets) {
           c.stage = "earning";
+          c.passed = true;
           log(c, `Passed the ${c.checkMinutes}-min check: ${c.stats.outsideWallets} outside wallets`);
         } else {
           await markDud(c, `Failed the ${c.checkMinutes}-min check: only ${c.stats.outsideWallets}/${c.minWallets} outside wallets`);
@@ -823,7 +878,7 @@ setInterval(tick, 2000);
 
 const publicCoin = (c) => {
   const { sim, busy, uri, ...rest } = c;
-  const { walletList, slotBuys, lastSig, ...stats } = c.stats ?? {};
+  const { walletList, slotBuys, lastSig, buyers, ...stats } = c.stats ?? {};
   return { ...rest, stats, postText: c.mint ? postText(c) : "" };
 };
 
@@ -907,7 +962,11 @@ async function addCoin(form) {
   c.image = `${c.id}.${ext}`;
   c.imageType = image.type;
   fs.writeFileSync(path.join(IMAGES, c.image), Buffer.from(await image.arrayBuffer()));
+  return registerCoin(c);
+}
 
+/** Gives a new coin its fresh wallet and puts it on the autopilot. */
+function registerCoin(c) {
   const wallet = Keypair.generate(); // the fresh wallet: creator of this coin, gets its creator fees
   keys[c.id] = Array.from(wallet.secretKey);
   Object.assign(c, {
@@ -918,6 +977,379 @@ async function addCoin(form) {
   log(c, `Added - launch ${c.launchAt <= Date.now() ? "now" : "at " + new Date(c.launchAt).toLocaleString()}`);
   if (c.makeSite) buildSiteFor(c); // runs in the background (about a minute)
   return publicCoin(c);
+}
+
+// ---------- Brands: ideas -> approved queue -> live -> runner / retired ----------
+
+function ideaContext() {
+  return {
+    safe: brain.safeWords(60), hot: brain.hotWords(6, 60),
+    usedNames: new Set([...brands.map((b) => b.name.toLowerCase()), ...coins.map((c) => c.name.toLowerCase())]),
+    usedTickers: new Set([...brands.map((b) => b.symbol), ...coins.map((c) => c.symbol)]),
+    seen: brain.nameSeen,
+  };
+}
+
+const clashQueue = [];
+let clashBusy = false;
+async function runClashChecks() {
+  if (clashBusy) return;
+  clashBusy = true;
+  try {
+    while (clashQueue.length) {
+      const b = brands.find((x) => x.id === clashQueue.shift());
+      if (!b) continue;
+      b.clash = { pending: true };
+      b.clash = await checkClash(b);
+      save();
+      await sleep(1200); // DexScreener allows ~60 searches a minute
+    }
+  } finally {
+    clashBusy = false;
+  }
+}
+function queueClash(b) {
+  b.clash = { pending: true };
+  clashQueue.push(b.id);
+  runClashChecks();
+}
+
+function newBrand(fields, source) {
+  const b = {
+    id: randomBytes(5).toString("hex"), status: "idea", source, createdAt: Date.now(), tries: [],
+    website: "", twitter: "", telegram: "", order: 0, ...fields,
+  };
+  brands.unshift(b);
+  queueClash(b);
+  return b;
+}
+
+function generateIdeas(count, source) {
+  const ctx = ideaContext();
+  if (!ctx.safe.length && !ctx.hot.length) throw new UserError("The brain hasn't learned any market words yet - leave AUTOPILOT running for an hour or two, then try again.");
+  const made = makeIdeas(count, source, ctx).map(({ check, ...idea }) => newBrand({ ...idea, check }, "brain"));
+  if (!made.length) throw new UserError("No new names passed the checks right now - try again later or switch the source.");
+  save();
+  return made.length;
+}
+
+function brandTries(b) {
+  return b.tries.map((t) => ({ ...t, coin: coins.find((c) => c.id === t.coinId) }));
+}
+
+/** Moves a brand along after each try: runner if a try took off, retired after its last try, else waits for the retry. */
+function updateBrand(b) {
+  if (!["approved", "live"].includes(b.status)) return;
+  const tries = brandTries(b);
+  if (!tries.length) return void (b.status = "approved");
+  if (tries.some((t) => t.coin?.passed)) {
+    b.status = "runner";
+    return apLog(`${b.name} is a runner - no more retries needed`);
+  }
+  const last = tries[tries.length - 1].coin;
+  if (last && ["fund", "pair", "upload", "launch", "post", "checks"].includes(last.stage)) return void (b.status = "live");
+  const max = settings.triesPerDay * settings.maxDays;
+  const ageDays = (Date.now() - tries[0].at) / 86400_000;
+  if (tries.length >= max || ageDays >= settings.maxDays) {
+    b.status = "retired";
+    return apLog(`${b.name} retired after ${tries.length} ${tries.length === 1 ? "try" : "tries"}`);
+  }
+  const lastEnd = last?.launchedAt ?? tries[tries.length - 1].at;
+  let next = lastEnd + settings.retryGapMinutes * 60_000;
+  const today = tries.filter((t) => Date.now() - t.at < 86400_000);
+  if (today.length >= settings.triesPerDay) next = Math.max(next, today[0].at + 86400_000);
+  b.status = "approved";
+  b.nextTryAt = next;
+}
+
+const PRE_LAUNCH = ["fund", "pair", "upload", "launch"];
+let apStatus = "Autopilot is off";
+let lastSweep = 0;
+
+function localHour() {
+  return new Date(Date.now() - settings.tzOffset * 60_000).getUTCHours();
+}
+function inWindow() {
+  const { windowStart: a, windowEnd: b } = settings;
+  const h = localHour();
+  if (a === b || (a === 0 && b === 24)) return true;
+  return a < b ? h >= a && h < b : h >= a || h < b;
+}
+
+/** The next brand to launch: a retry that is due first, then new brands in queue order. */
+function nextBrand() {
+  const now = Date.now();
+  const ready = brands.filter((b) => b.status === "approved" && b.image);
+  const retries = ready.filter((b) => b.tries.length && (b.nextTryAt ?? 0) <= now).sort((a, b) => a.nextTryAt - b.nextTryAt);
+  if (retries.length) return retries[0];
+  return ready.filter((b) => !b.tries.length).sort((a, b) => a.order - b.order || a.approvedAt - b.approvedAt)[0];
+}
+
+function launchBrand(b) {
+  const s = settings;
+  const c = {
+    id: randomBytes(6).toString("hex"), brandId: b.id, tryNo: b.tries.length + 1, auto: true,
+    name: b.name, symbol: b.symbol, description: b.description ?? "", website: b.website, twitter: b.twitter, telegram: b.telegram,
+    xPost: b.xPost ?? "", devBuySol: s.devBuySol, launchAt: Date.now() + s.leadMinutes * 60_000, checkMinutes: s.checkMinutes,
+    minWallets: s.minWallets, autoSellDud: true, autoClaimSol: s.autoClaimSol, takeProfitX: s.takeProfitX, makeSite: false,
+    image: b.image, imageType: b.imageType,
+  };
+  registerCoin(c);
+  b.tries.push({ coinId: c.id, at: Date.now() });
+  b.status = "live";
+  apLog(`Started try ${c.tryNo} of ${b.name} $${b.symbol} - launches in ${s.leadMinutes} min with ${s.devBuySol} SOL dev buy`);
+}
+
+async function autopilotTick() {
+  for (const b of brands) updateBrand(b);
+  // a failed autopilot launch: stop it and bring its SOL back to the float
+  for (const c of coins) {
+    if (!c.auto || c.stage !== "failed" || c.busy) continue;
+    c.stage = "stopped";
+    c.busy = true;
+    try {
+      const got = await withdrawCoin(c);
+      log(c, `Autopilot brought ${got.toFixed(4)} SOL back to the main wallet`);
+    } catch (e) {
+      c.stage = "failed";
+      log(c, `Couldn't bring SOL back yet: ${e.message}`);
+    } finally {
+      c.busy = false;
+    }
+  }
+  await profitSweep().catch((e) => apLog(`Profit sweep failed: ${e.message}`));
+
+  const s = settings;
+  const now = Date.now();
+  if (!s.autopilot) return void (apStatus = "Autopilot is off");
+  if (s.spendLock) return void (apStatus = "Spending lock is on - nothing new gets funded");
+  if (coins.some((c) => c.auto && PRE_LAUNCH.includes(c.stage))) return void (apStatus = "A launch is getting ready");
+  if (!inWindow()) return void (apStatus = `Outside launch hours (${s.windowStart}:00-${s.windowEnd}:00 your time)`);
+  const auto = coins.filter((c) => c.auto);
+  if (auto.filter((c) => now - c.createdAt < 86400_000).length >= s.maxLaunchesPerDay) return void (apStatus = `Daily cap reached (${s.maxLaunchesPerDay} launches in 24h)`);
+  const last = Math.max(0, ...auto.map((c) => c.createdAt));
+  if (now - last < s.minGapMinutes * 60_000) return void (apStatus = `Next launch allowed in ${Math.ceil((last + s.minGapMinutes * 60_000 - now) / 60_000)} min (gap between launches)`);
+  const b = nextBrand();
+  if (!b) {
+    const waiting = brands.filter((x) => x.status === "approved" && x.image && x.nextTryAt > now).sort((x, y) => x.nextTryAt - y.nextTryAt)[0];
+    return void (apStatus = waiting ? `Next retry: ${waiting.name} in ${Math.ceil((waiting.nextTryAt - now) / 60_000)} min` : "Queue is empty - approve some ideas");
+  }
+  if (!SIMULATE) {
+    if (!PINATA_JWT) return void (apStatus = "PINATA_JWT is missing - launches can't upload");
+    const need = s.devBuySol + FUND_EXTRA_SOL + 0.002;
+    const have = await mainBalance();
+    if (have < need) return void (apStatus = `Float too low: ${b.name} needs ${need.toFixed(3)} SOL, main wallet has ${have.toFixed(3)}`);
+  }
+  apStatus = `Launching ${b.name}`;
+  launchBrand(b);
+  save();
+}
+
+/** Optional: when the main wallet (the float) grows past target + extra, the extra goes to your Phantom. */
+async function profitSweep() {
+  const s = settings;
+  if (!s.autoSweep || SIMULATE || !s.withdrawTo || Date.now() - lastSweep < 10 * 60_000) return;
+  if (coins.some((c) => PRE_LAUNCH.includes(c.stage))) return;
+  const bal = await mainBalance();
+  if (bal < s.floatTarget + s.sweepAbove) return;
+  lastSweep = Date.now();
+  const lamports = Math.floor((bal - s.floatTarget) * SOL);
+  await sendIxs([mainWallet], [SystemProgram.transfer({ fromPubkey: mainWallet.publicKey, toPubkey: new PublicKey(s.withdrawTo), lamports })], 1000);
+  mainBalCache.at = 0;
+  apLog(`Profit sweep: sent ${(lamports / SOL).toFixed(4)} SOL to your Phantom (float kept at ${s.floatTarget} SOL)`);
+}
+
+let apTicking = false;
+setInterval(async () => {
+  if (apTicking || restoring) return;
+  apTicking = true;
+  try {
+    await autopilotTick();
+  } catch (e) {
+    apStatus = `Problem: ${e.message}`;
+    console.error("[autopilot]", e);
+  } finally {
+    apTicking = false;
+  }
+}, 10_000);
+
+function saveAutopilot(body) {
+  const num = (k, lo, hi) => {
+    if (body[k] === undefined) return;
+    const v = Number(body[k]);
+    if (!Number.isFinite(v) || v < lo || v > hi) throw new UserError(`${k} must be between ${lo} and ${hi}.`);
+    settings[k] = v;
+  };
+  num("devBuySol", 0, 20); num("leadMinutes", 1, 120); num("minGapMinutes", 0, 1440); num("triesPerDay", 1, 24);
+  num("retryGapMinutes", 0, 2880); num("maxDays", 1, 30); num("maxLaunchesPerDay", 1, 100); num("windowStart", 0, 24);
+  num("windowEnd", 0, 24); num("tzOffset", -900, 900); num("checkMinutes", 1, 120); num("minWallets", 1, 1000);
+  num("takeProfitX", 0, 100); num("autoClaimSol", 0, 10); num("floatTarget", 0, 1000); num("sweepAbove", 0.01, 1000);
+  if (settings.takeProfitX > 0 && settings.takeProfitX <= 1) throw new UserError("Auto-sell must be above 1x (or 0 for off).");
+  for (const k of ["autopilot", "spendLock", "autoSweep"]) if (body[k] !== undefined) settings[k] = !!body[k];
+  if (settings.autoSweep && !settings.withdrawTo) throw new UserError("Save your Phantom address first (Wallet tab), then turn on the profit sweep.");
+  writeJson("settings.json", settings);
+  apLog(`Settings changed: ${Object.keys(body).filter((k) => k !== "tzOffset").join(", ")}`);
+}
+
+async function brandAction(body) {
+  if (body.action === "new") {
+    const name = String(body.name ?? "").trim().replace(/\s+/g, " ");
+    const symbol = String(body.symbol ?? "").trim().toUpperCase().replace(/^\$/, "");
+    if (!name || name.length > 32) throw new UserError("Name must be 1-32 characters.");
+    if (!/^[A-Z0-9]{1,10}$/.test(symbol)) throw new UserError("Ticker must be 1-10 letters or numbers.");
+    const b = newBrand({
+      name, symbol, description: String(body.description ?? "").slice(0, 1000), tagline: "", word: "", why: "added by you",
+      xPost: `${name} $${symbol} is live\n\nCA: {CA}\n\n{WEBSITE}`, check: checkName({ name, symbol }, ideaContext()),
+    }, "you");
+    save();
+    return { id: b.id };
+  }
+  const b = brands.find((x) => x.id === body.id);
+  if (!b) throw new UserError("Brand not found.");
+  switch (body.action) {
+    case "reject": b.status = "rejected"; break;
+    case "restore": if (b.status !== "rejected") throw new UserError("Only rejected ideas can come back."); b.status = "idea"; break;
+    case "recheck": b.check = checkName(b, { ...ideaContext(), usedNames: new Set(), usedTickers: new Set() }); queueClash(b); break;
+    case "retire": b.status = "retired"; apLog(`${b.name} retired by you`); break;
+    case "requeue":
+      if (!["retired", "runner"].includes(b.status)) throw new UserError("Only retired brands can go back in the queue.");
+      Object.assign(b, { status: "approved", tries: [], nextTryAt: 0 }); break;
+    case "up": case "down": {
+      const q = brands.filter((x) => x.status === "approved" && !x.tries.length).sort((x, y) => x.order - y.order);
+      q.forEach((x, i) => (x.order = i));
+      const i = q.indexOf(b), j = body.action === "up" ? i - 1 : i + 1;
+      if (i < 0 || j < 0 || j >= q.length) break;
+      [q[i].order, q[j].order] = [q[j].order, q[i].order];
+      break;
+    }
+    case "delete":
+      if (!["idea", "rejected"].includes(b.status)) throw new UserError("Only ideas can be deleted - retire it instead.");
+      brands.splice(brands.indexOf(b), 1);
+      break;
+    default: throw new UserError("Unknown action.");
+  }
+  save();
+  return { ok: true };
+}
+
+/** Approve (or edit) a brand: logo + links + text. It then joins the launch queue. */
+async function approveBrand(form) {
+  const b = brands.find((x) => x.id === String(form.get("id")));
+  if (!b) throw new UserError("Brand not found.");
+  if (!["idea", "approved", "rejected"].includes(b.status)) throw new UserError("This brand is already launching - wait for its try to end.");
+  const str = (k) => String(form.get(k) ?? "").trim();
+  const optUrl = (k) => {
+    const v = str(k);
+    if (v && (!/^https?:\/\/\S+$/i.test(v) || v.length > 200)) throw new UserError(`The ${k} link must start with https://`);
+    return v;
+  };
+  const name = str("name") || b.name, symbol = (str("symbol") || b.symbol).toUpperCase().replace(/^\$/, "");
+  if (name.length > 32) throw new UserError("Name must be 1-32 characters.");
+  if (!/^[A-Z0-9]{1,10}$/.test(symbol)) throw new UserError("Ticker must be 1-10 letters or numbers.");
+  const image = form.get("image");
+  if (image instanceof File && image.size) {
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(image.type)) throw new UserError("Image must be PNG, JPG, GIF or WebP.");
+    if (image.size > 10 * 1024 * 1024) throw new UserError("Image must be 10MB or smaller.");
+    const ext = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" }[image.type];
+    b.image = `b-${b.id}-${Date.now().toString(36)}.${ext}`; // new name each time, so old tries keep their picture
+    b.imageType = image.type;
+    fs.writeFileSync(path.join(IMAGES, b.image), Buffer.from(await image.arrayBuffer()));
+  }
+  if (!b.image) throw new UserError("Add a logo first (make one or upload your own).");
+  if (name !== b.name || symbol !== b.symbol) queueClash(b);
+  Object.assign(b, {
+    name, symbol, description: str("description").slice(0, 1000) || b.description, xPost: str("xPost").slice(0, 280) || b.xPost,
+    website: optUrl("website"), twitter: optUrl("twitter"), telegram: optUrl("telegram"),
+  });
+  if (b.status !== "approved") {
+    b.status = "approved";
+    b.approvedAt = Date.now();
+    b.order = Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1));
+    apLog(`${b.name} $${b.symbol} approved - joined the launch queue`);
+  }
+  save();
+  return { ok: true };
+}
+
+// ---------- Results + bot radar ----------
+
+const dayKey = (t) => new Date(t - settings.tzOffset * 60_000).toISOString().slice(0, 10);
+
+function resultRows() {
+  return coins.filter((c) => c.mint).map((c) => {
+    const st = c.stats;
+    return {
+      id: c.id, brandId: c.brandId ?? "", name: c.name, symbol: c.symbol, try: c.tryNo ?? 1, auto: !!c.auto, launchedAt: c.launchedAt,
+      mint: c.mint, pair: isPair(c) ? c.quote.symbol : "SOL", devBuy: c.devBuySol, funded: +c.fundedSol.toFixed(4),
+      wallets: st.outsideWallets, volume: st.outsideVolume, fees: +(st.feesClaimed + st.claimable).toFixed(4), unclaimed: st.claimable,
+      devBag: st.devBagSol, peakX: st.peakX, profit: st.profit, bundles: st.bundles.length, stage: c.stage, hit: !!c.passed,
+    };
+  }).sort((a, b) => b.launchedAt - a.launchedAt);
+}
+
+function results() {
+  const rows = resultRows();
+  const days = [];
+  for (let i = 13; i >= 0; i--) days.push({ day: dayKey(Date.now() - i * 86400_000), profit: 0, fees: 0, volume: 0, launches: 0 });
+  for (const r of rows) {
+    const d = days.find((x) => x.day === dayKey(r.launchedAt));
+    if (!d) continue;
+    d.profit += r.profit; d.fees += r.fees; d.volume += r.volume; d.launches++;
+  }
+  for (const d of days) for (const k of ["profit", "fees", "volume"]) d[k] = +d[k].toFixed(4);
+  const group = (keyFn, labelFn) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      const g = m.get(k) ?? { key: k, label: labelFn(r), launches: 0, hits: 0, profit: 0, fees: 0, best: -Infinity };
+      g.launches++; if (r.hit) g.hits++; g.profit += r.profit; g.fees += r.fees; g.best = Math.max(g.best, r.profit);
+      m.set(k, g);
+    }
+    return [...m.values()].map((g) => ({ ...g, profit: +g.profit.toFixed(4), fees: +g.fees.toFixed(4), perLaunch: +(g.profit / g.launches).toFixed(4), best: +g.best.toFixed(4) }))
+      .sort((a, b) => b.profit - a.profit);
+  };
+  const total = rows.reduce((a, r) => ({ profit: a.profit + r.profit, fees: a.fees + r.fees, hits: a.hits + (r.hit ? 1 : 0) }), { profit: 0, fees: 0, hits: 0 });
+  return {
+    rows, days,
+    total: { launches: rows.length, hits: total.hits, profit: +total.profit.toFixed(4), fees: +total.fees.toFixed(4), unclaimed: +rows.reduce((a, r) => a + r.unclaimed, 0).toFixed(4) },
+    byBrand: group((r) => r.brandId || r.name, (r) => `${r.name} $${r.symbol}`),
+    byPair: group((r) => `${r.pair}|${r.devBuy}`, (r) => `${r.pair} · ${r.devBuy} SOL dev buy`),
+    unclaimed: rows.filter((r) => r.unclaimed > 0.0005).sort((a, b) => b.unclaimed - a.unclaimed).slice(0, 20),
+  };
+}
+
+function resultsCsv() {
+  const cols = ["launchedAt", "name", "symbol", "try", "mint", "pair", "devBuy", "funded", "wallets", "volume", "fees", "devBag", "peakX", "profit", "hit", "stage"];
+  const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replaceAll('"', '""')}"` : String(v));
+  return [cols.join(","), ...resultRows().map((r) => cols.map((k) => cell(k === "launchedAt" ? new Date(r[k]).toISOString() : r[k])).join(","))].join("\n");
+}
+
+/** Every outside wallet that bought our coins: how often, how fast, in bundles, and whether the brain knows it as a bot. */
+function radar() {
+  const m = new Map();
+  for (const c of coins) {
+    const buyers = c.stats?.buyers;
+    if (!c.mint || !buyers) continue;
+    const bundled = new Set();
+    for (const list of Object.values(c.stats.slotBuys ?? {})) if (list.length >= 2) list.forEach((x) => bundled.add(x.wallet));
+    for (const [w, b] of Object.entries(buyers)) {
+      const r = m.get(w) ?? { wallet: w, coins: 0, bought: 0, sold: 0, fastest: Infinity, bundles: 0, last: 0, names: [] };
+      r.coins++; r.bought += b.buy; r.sold += b.sell; r.last = Math.max(r.last, b.first);
+      r.fastest = Math.min(r.fastest, Math.max(0, Math.round((b.first - c.launchedAt) / 1000)));
+      if (bundled.has(w)) r.bundles++;
+      if (r.names.length < 4) r.names.push(c.symbol);
+      m.set(w, r);
+    }
+  }
+  const list = [...m.values()].map((r) => {
+    const labels = [];
+    if (r.fastest <= 3) labels.push("Block-0 sniper");
+    if (r.bundles >= 2) labels.push(`Bundler · ${r.bundles} coins`);
+    if (r.coins >= 2) labels.push("Repeat trader");
+    if (brain.isBot(r.wallet)) labels.push("Market bot");
+    return { ...r, bought: +r.bought.toFixed(3), sold: +r.sold.toFixed(3), fastest: Number.isFinite(r.fastest) ? r.fastest : null, labels, label: settings.walletNames[r.wallet] ?? "" };
+  }).sort((a, b) => b.coins - a.coins || b.bought - a.bought);
+  return { wallets: list.slice(0, 150), total: list.length, repeat: list.filter((r) => r.coins >= 2).length, snipers: list.filter((r) => r.fastest !== null && r.fastest <= 3).length, marketBots: brain.botWallets(30) };
 }
 
 async function coinAction(c, action) {
@@ -1060,11 +1492,12 @@ if(r.ok)location.href="/";else document.getElementById("e").textContent=(await r
 
 function backup() {
   const images = {};
-  for (const c of coins) {
+  for (const c of [...coins, ...brands]) {
+    if (!c.image || images[c.image]) continue;
     const p = path.join(IMAGES, c.image);
     if (fs.existsSync(p)) images[c.image] = fs.readFileSync(p).toString("base64");
   }
-  return { autopilotBackup: 1, at: new Date().toISOString(), mainSecret, keys, coins: coins.map(({ busy, ...c }) => c), settings, images };
+  return { autopilotBackup: 1, at: new Date().toISOString(), mainSecret, keys, coins: coins.map(({ busy, ...c }) => c), settings, images, brands, activity };
 }
 
 let restoring = false;
@@ -1079,6 +1512,8 @@ async function restore(b) {
   writeSecret("keys.json", b.keys ?? {});
   writeJson("coins.json", b.coins ?? []);
   writeJson("settings.json", b.settings ?? {});
+  writeJson("brands.json", b.brands ?? []);
+  writeJson("activity.json", b.activity ?? []);
   console.log("Backup restored - restarting.");
   setTimeout(() => process.exit(0), 800); // Render starts it again with the restored wallets
 }
@@ -1122,7 +1557,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname.startsWith("/img/")) {
       const name = path.basename(url.pathname);
-      const c = coins.find((x) => x.image === name);
+      const c = coins.find((x) => x.image === name) ?? brands.find((x) => x.image === name);
       if (!c) return json(res, 404, { error: "Not found" });
       res.writeHead(200, { "Content-Type": c.imageType, "Cache-Control": "max-age=86400" });
       return fs.createReadStream(path.join(IMAGES, name)).pipe(res);
@@ -1141,8 +1576,19 @@ const server = http.createServer(async (req, res) => {
         simulate: SIMULATE, pinata: !!PINATA_JWT, x: X_READY, customRpc: !!process.env.SOLANA_RPC_URL, site: siteConfig, public: PUBLIC,
         main: { address: mainWallet.publicKey.toBase58(), sol: SIMULATE ? 0 : await mainBalance() },
         withdrawTo: settings.withdrawTo, now: Date.now(), coins: coins.map(publicCoin),
+        ap: { ...Object.fromEntries(Object.keys(AP_DEFAULTS).map((k) => [k, settings[k]])), status: apStatus, activity: activity.slice(0, 40) },
+        brands: brands.filter((b) => b.status !== "rejected" || Date.now() - b.createdAt < 3 * 86400_000),
       });
     }
+    if (req.method === "GET" && url.pathname === "/api/brain") {
+      return json(res, 200, { ...brain.summary(), safe: brain.safeWords(40), hot: brain.hotWords(6, 40) });
+    }
+    if (req.method === "GET" && url.pathname === "/api/results") return json(res, 200, results());
+    if (req.method === "GET" && url.pathname === "/api/results.csv") {
+      res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="autopilot-results-${new Date().toISOString().slice(0, 10)}.csv"` });
+      return res.end(resultsCsv());
+    }
+    if (req.method === "GET" && url.pathname === "/api/radar") return json(res, 200, radar());
 
     if (req.method === "POST") {
       // Only this page may press buttons, so other websites can't drive your launcher.
@@ -1152,6 +1598,7 @@ const server = http.createServer(async (req, res) => {
       if (restoring) throw new UserError("Restarting with the restored backup - reload in a few seconds.");
       const request = new Request(url, { method: "POST", headers: req.headers, body: req, duplex: "half" });
       if (url.pathname === "/api/coins") return json(res, 200, await addCoin(await request.formData()));
+      if (url.pathname === "/api/brand-approve") return json(res, 200, await approveBrand(await request.formData()));
       const body = await request.json().catch(() => ({}));
       if (url.pathname === "/api/logout") {
         res.setHeader("Set-Cookie", "ap=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
@@ -1177,6 +1624,24 @@ const server = http.createServer(async (req, res) => {
         writeJson("settings.json", settings);
         return json(res, 200, { ok: true });
       }
+      if (url.pathname === "/api/autopilot") {
+        saveAutopilot(body);
+        return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/api/ideas") {
+        const count = Math.min(20, Math.max(1, Number(body.count) || 6));
+        return json(res, 200, { made: generateIdeas(count, ["safe", "hot"].includes(body.source) ? body.source : "both") });
+      }
+      if (url.pathname === "/api/brand") return json(res, 200, await brandAction(body));
+      if (url.pathname === "/api/wallet-name") {
+        const w = String(body.wallet ?? "");
+        new PublicKey(w);
+        const label = String(body.label ?? "").trim().slice(0, 40);
+        if (label) settings.walletNames[w] = label;
+        else delete settings.walletNames[w];
+        writeJson("settings.json", settings);
+        return json(res, 200, { ok: true });
+      }
       if (url.pathname === "/api/withdraw-main") {
         if (SIMULATE) throw new UserError("Practice mode - nothing real to withdraw.");
         if (!settings.withdrawTo) throw new UserError("Save your Phantom address first.");
@@ -1193,6 +1658,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+brain.start(); // market study runs all the time (read-only)
 if (PUBLIC) {
   server.listen(PORT, "0.0.0.0", () => {
     chainData().catch(() => {});

@@ -55,3 +55,39 @@ SAFETY - IMPORTANT
   BACK IT UP (copy it to a USB stick). If you delete it, SOL in those wallets is lost.
 - Never send the data folder or any key to anyone. Never type your Phantom seed phrase anywhere.
 - Only keep in the main wallet what you plan to launch with. Withdraw profits to Phantom.
+
+=====================================================================
+NEW (Nov 2026): FULL AUTOPILOT - ideas, queue, results, bot radar
+=====================================================================
+The dashboard now has tabs: Home, Launches, Ideas, Brain, Results, Radar, Settings.
+
+BRAIN (market study, runs by itself, read-only)
+  Watches every new Pump.fun coin. After 3 and 10 minutes it reads each coin's
+  market cap from Solana. Coins that ran = "hits". From that it learns:
+    Safe words - words that hit more often than normal over up to 7 days
+    Hot words  - words in coins that hit in the last 6 hours
+  It needs a few hours of running before it has words. Leave it on.
+  Optional: PUMPPORTAL_API_KEY (a PumpPortal key funded with 0.02 SOL) in .env /
+  Render turns on bot-wallet tracking (snipers + bundler groups) too.
+
+IDEAS
+  Generate      -> makes coin names from the safe + hot words, then checks each:
+                   market word in the name, no banned words, not used before,
+                   no big coin with the same name/ticker on DexScreener.
+  Approve...    -> check the name, make a logo (Shuffle) or upload your own,
+                   add website / X if you have them. It joins the LAUNCH QUEUE.
+  + My own idea -> type a name yourself.
+
+AUTOPILOT (Home tab)
+  Autopilot ON + Spending lock OFF = it launches the queue by itself:
+    - one launch at a time, at least "gap" minutes apart, only in your launch hours
+    - a dud is retried on a new fresh wallet after the retry gap
+      (max "tries per day", retired after "max days")
+    - a coin that passes the check = RUNNER, no more retries
+    - failed launches send their SOL back to the main wallet
+  Rules are in Settings. The main wallet = the FLOAT that pays for every launch.
+  Profit sweep (optional): float above target + extra -> extra goes to your Phantom.
+
+RESULTS  profit per day, per brand, per pair + dev buy, every launch, Export CSV.
+RADAR    every outside wallet that bought your coins: block-0 snipers, bundlers,
+         repeat traders. Tap "+ name" to label a wallet.
