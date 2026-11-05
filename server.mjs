@@ -24,6 +24,10 @@ import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs
 import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
 import { createBrain } from "./brain.mjs";
 import { checkClash, checkName, makeIdeas } from "./ideas.mjs";
+import { aiError, aiReady } from "./ai.mjs";
+import { makeArt } from "./art.mjs";
+import { planSite, renderSite, templatePlan } from "./sites.mjs";
+import { createX, xAppReady } from "./xauth.mjs";
 
 const PORT = Number(process.env.PORT || 3480);
 const SIMULATE = process.env.SIMULATE !== "0"; // practice mode until you set SIMULATE=0 in .env
@@ -133,6 +137,10 @@ const settings = { withdrawTo: "", walletNames: {}, ...AP_DEFAULTS, ...readJson(
 const brands = readJson("brands.json", []); // coin ideas -> approved queue -> live -> runner / retired
 const activity = readJson("activity.json", []); // autopilot's own log
 const brain = createBrain(DATA, { apiKey: (process.env.PUMPPORTAL_API_KEY || "").trim(), readCurves });
+const xa = createX({ readSecret, writeSecret }); // connected X accounts
+const X_LEAD_MS = 30_000; // the launch post goes out this long before the coin launches
+// Coin websites: <slug>.SITE_DOMAIN when you point a wildcard domain here, else <this address>/s/<slug>
+const SITE_DOMAIN = (process.env.SITE_DOMAIN || "").trim().toLowerCase();
 
 /** Market cap (in SOL) of many Pump.fun coins at once, read from their bonding curves. Graduated = 400. */
 async function readCurves(mints) {
@@ -297,6 +305,13 @@ async function postOnX(text) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`X said ${r.status}: ${JSON.stringify(j).slice(0, 160)}`);
   return j.data?.id;
+}
+
+/** The post that goes out ~30s before launch (no CA yet - that comes in the reply). */
+function launchPostText(c) {
+  const b = brands.find((x) => x.id === c.brandId);
+  const t = b?.launchPost || `${c.name} $${c.symbol}\n\n${(b?.tagline || c.description || "").slice(0, 160)}\n\n${c.website || ""}`;
+  return t.replaceAll("{NAME}", c.name).replaceAll("{TICKER}", c.symbol).replaceAll("{WEBSITE}", c.website || "").trim();
 }
 
 function postText(c) {
@@ -743,13 +758,31 @@ async function step(c) {
     case "upload": {
       // The website link goes into the coin's Pump.fun details, so wait until the site is up.
       if (c.site?.status === "building") return void (c.status = "Waiting for the website to go live");
-      if (!SIMULATE) c.uri ??= await uploadMetadata(c);
-      log(c, "Image + details uploaded");
+      // With a connected X account the launch post's link goes into the details too, so upload just before launch instead.
+      if (!SIMULATE && !c.xAccountId) c.uri ??= await uploadMetadata(c);
+      log(c, c.xAccountId ? "Ready - details upload right after the X post" : "Image + details uploaded");
       c.stage = "launch";
       return;
     }
     case "launch": {
-      if (now < c.launchAt) return void (c.status = "Ready - waiting for launch time");
+      // Post on X ~30s before launch: the post becomes the coin's X link on pump.fun, then we reply with the CA.
+      if (c.xAccountId && !c.xPostTried && now >= c.launchAt - X_LEAD_MS) {
+        c.xPostTried = true;
+        const handle = xa.find(c.xAccountId)?.handle;
+        if (SIMULATE) {
+          c.xPostId = "practice";
+          log(c, `Practice: would post on X from @${handle ?? "?"}: "${launchPostText(c).split("\n")[0]}…"`);
+        } else {
+          try {
+            const p = await xa.post(c.xAccountId, launchPostText(c));
+            Object.assign(c, { xPostId: p.id, twitter: p.url, uri: null, posted: true });
+            log(c, `Posted on X from @${handle}: ${p.url}`);
+          } catch (e) {
+            log(c, `X launch post failed: ${e.message} - launching without it`);
+          }
+        }
+      }
+      if (now < c.launchAt) return void (c.status = c.xAccountId && !c.xPostTried ? `Ready - posts on X ${Math.round(X_LEAD_MS / 1000)}s before launch` : "Ready - waiting for launch time");
       c.status = "Launching...";
       try {
         if (c.pendingMint && (await rpc.getAccountInfo(new PublicKey(c.pendingMint)))) {
@@ -776,7 +809,26 @@ async function step(c) {
       if (c.site?.status === "live") {
         updateSiteCA(c, IMAGES).then(() => log(c, "Website now shows the CA"), (e) => log(c, `Couldn't put the CA on the website: ${e.message}`));
       }
-      if (X_READY && !SIMULATE) {
+      if (c.xAccountId && c.xPostId) {
+        // reply to our own launch post with the CA
+        if (SIMULATE) log(c, "Practice: would reply on X with the CA");
+        else {
+          try {
+            const p = await xa.post(c.xAccountId, postText(c), c.xPostId);
+            log(c, `Replied on X with the CA: ${p.url}`);
+          } catch (e) {
+            log(c, `X CA reply failed: ${e.message} - use "Copy CA post"`);
+          }
+        }
+      } else if (c.xAccountId && !SIMULATE) {
+        try {
+          const p = await xa.post(c.xAccountId, postText(c));
+          c.posted = true;
+          log(c, `Posted the CA on X: ${p.url}`);
+        } catch (e) {
+          log(c, `X post failed: ${e.message} - use "Copy CA post" instead`);
+        }
+      } else if (X_READY && !SIMULATE) {
         try {
           const id = await postOnX(postText(c));
           c.posted = true;
@@ -1079,7 +1131,8 @@ function inWindow() {
 /** The next brand to launch: a retry that is due first, then new brands in queue order. */
 function nextBrand() {
   const now = Date.now();
-  const ready = brands.filter((b) => b.status === "approved" && b.image);
+  // ready = has a logo and its website isn't still being written
+  const ready = brands.filter((b) => b.status === "approved" && b.image && (b.plan || b.website) && b.prep?.art !== "working" && b.prep?.site !== "working");
   const retries = ready.filter((b) => b.tries.length && (b.nextTryAt ?? 0) <= now).sort((a, b) => a.nextTryAt - b.nextTryAt);
   if (retries.length) return retries[0];
   return ready.filter((b) => !b.tries.length).sort((a, b) => a.order - b.order || a.approvedAt - b.approvedAt)[0];
@@ -1089,7 +1142,8 @@ function launchBrand(b) {
   const s = settings;
   const c = {
     id: randomBytes(6).toString("hex"), brandId: b.id, tryNo: b.tries.length + 1, auto: true,
-    name: b.name, symbol: b.symbol, description: b.description ?? "", website: b.website, twitter: b.twitter, telegram: b.telegram,
+    name: b.name, symbol: b.symbol, description: b.description ?? "", website: b.website || (b.plan ? siteUrl(b) : ""), twitter: b.twitter, telegram: b.telegram,
+    xAccountId: brandX(b)?.id ?? null,
     xPost: b.xPost ?? "", devBuySol: s.devBuySol, launchAt: Date.now() + s.leadMinutes * 60_000, checkMinutes: s.checkMinutes,
     minWallets: s.minWallets, autoSellDud: true, autoClaimSol: s.autoClaimSol, takeProfitX: s.takeProfitX, makeSite: false,
     image: b.image, imageType: b.imageType,
@@ -1097,7 +1151,115 @@ function launchBrand(b) {
   registerCoin(c);
   b.tries.push({ coinId: c.id, at: Date.now() });
   b.status = "live";
-  apLog(`Started try ${c.tryNo} of ${b.name} $${b.symbol} - launches in ${s.leadMinutes} min with ${s.devBuySol} SOL dev buy`);
+  apLog(`Started try ${c.tryNo} of ${b.name} $${b.symbol} - launches in ${s.leadMinutes} min with ${s.devBuySol} SOL dev buy${c.xAccountId ? ` · posts from @${brandX(b).handle}` : ""}`);
+}
+
+// ---------- Logo, banner + website for every approved brand (made by themselves) ----------
+
+function slugOf(b) {
+  if (b.slug) return b.slug;
+  let s = b.symbol.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30) || b.id;
+  if (brands.some((x) => x !== b && x.slug === s)) s = `${s}-${b.id.slice(0, 4)}`;
+  return (b.slug = s);
+}
+function baseUrl() {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.trim().replace(/\/$/, "");
+  return PUBLIC ? `https://${settings.lastHost || "localhost"}` : `http://localhost:${PORT}`;
+}
+function siteUrl(b) {
+  return SITE_DOMAIN ? `https://${slugOf(b)}.${SITE_DOMAIN}` : `${baseUrl()}/s/${slugOf(b)}`;
+}
+/** Which X account posts for this brand: its own pick, else your default account. */
+function brandX(b) {
+  const id = b.xAccountId && b.xAccountId !== "auto" ? b.xAccountId : b.xAccountId === "none" ? null : settings.defaultX;
+  return id ? xa.find(id) ?? null : null;
+}
+
+let prepBusy = false;
+/** One job at a time: logo + banner first (needed to launch), then the website plan. */
+async function prepTick() {
+  if (prepBusy || restoring) return;
+  const b = brands.find((x) => ["approved", "live"].includes(x.status) && ((!x.image && !x.prep?.artFailed) || (!x.plan && !x.prep?.siteFailed && !x.website)));
+  if (!b) return;
+  prepBusy = true;
+  b.prep ??= {};
+  try {
+    if (!b.image) {
+      b.prep.art = "working";
+      save();
+      try {
+        const a = await makeArt(b, b.prep.artSeed ?? 0);
+        const stamp = Date.now().toString(36);
+        b.image = `b-${b.id}-${stamp}.png`;
+        b.imageType = "image/png";
+        b.banner = `b-${b.id}-${stamp}-banner.png`;
+        b.palette = a.palette;
+        fs.writeFileSync(path.join(IMAGES, b.image), a.logo);
+        fs.writeFileSync(path.join(IMAGES, b.banner), a.banner);
+        b.prep.art = a.by;
+        apLog(`${b.name}: logo + banner made (${a.by === "claude" ? "by Claude" : "built-in design"})${a.note ? ` - ${a.note}` : ""}`);
+      } catch (e) {
+        Object.assign(b.prep, { art: "failed", artFailed: aiError(e) });
+        apLog(`${b.name}: logo failed - ${aiError(e)}`);
+      }
+    } else if (!b.plan) {
+      b.prep.site = "working";
+      save();
+      try {
+        b.plan = await planSite(b);
+        b.prep.site = b.plan.by;
+        apLog(`${b.name}: website ready at ${siteUrl(b)} (${b.plan.by === "claude" ? "written by Claude" : "template text - add a Claude key for custom writing"})`);
+      } catch (e) {
+        b.plan = templatePlan(b); // never leave a coin without a site
+        Object.assign(b.prep, { site: "template", siteNote: aiError(e) });
+        apLog(`${b.name}: Claude couldn't write the site (${aiError(e)}) - used the template`);
+      }
+    }
+  } finally {
+    prepBusy = false;
+    save();
+  }
+}
+setInterval(() => prepTick().catch((e) => console.error("[prep]", e)), 3000);
+
+/** The coin's page, with the CA of its latest launched try. */
+function sitePage(b) {
+  const tries = b.tries.map((t) => coins.find((c) => c.id === t.coinId)).filter((c) => c?.mint);
+  const last = tries[tries.length - 1];
+  const x = brandX(b);
+  const url = siteUrl(b);
+  const asset = (f) => (SITE_DOMAIN ? `${url}/${f}` : `${url}/${f}`);
+  return renderSite({
+    plan: b.plan ?? templatePlan(b), brand: { ...b, x }, ca: last?.mint ?? "", siteUrl: url,
+    xUrl: b.twitter || (x ? `https://x.com/${x.handle}` : ""), logo: asset("logo.png"), banner: asset(b.banner ? "banner.png" : "logo.png"),
+  });
+}
+
+/** Serves /s/<slug>/... or <slug>.SITE_DOMAIN/... - public, no login. Returns true if it answered. */
+function serveSite(req, res, url) {
+  let slug = null, rest = "";
+  const host = String(req.headers.host || "").toLowerCase().split(":")[0];
+  if (SITE_DOMAIN && host.endsWith(`.${SITE_DOMAIN}`)) {
+    slug = host.slice(0, -SITE_DOMAIN.length - 1);
+    rest = url.pathname.replace(/^\/+/, "");
+  } else {
+    const m = /^\/s\/([a-z0-9-]+)(?:\/(.*))?$/.exec(url.pathname);
+    if (!m) return false;
+    if (m[2] === undefined) { res.writeHead(301, { Location: `/s/${m[1]}/` }); res.end(); return true; }
+    [slug, rest] = [m[1], m[2]];
+  }
+  const b = brands.find((x) => x.slug === slug && !["rejected", "idea"].includes(x.status));
+  if (!b || req.method !== "GET") { res.writeHead(404, { "Content-Type": "text/plain" }); res.end("Not found"); return true; }
+  if (rest === "logo.png" || rest === "banner.png") {
+    const f = rest === "logo.png" ? b.image : b.banner;
+    if (!f || !fs.existsSync(path.join(IMAGES, f))) { res.writeHead(404); res.end(); return true; }
+    res.writeHead(200, { "Content-Type": rest === "logo.png" ? b.imageType || "image/png" : "image/png", "Cache-Control": "max-age=300" });
+    fs.createReadStream(path.join(IMAGES, f)).pipe(res);
+    return true;
+  }
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "max-age=30" });
+  res.end(sitePage(b));
+  return true;
 }
 
 async function autopilotTick() {
@@ -1211,6 +1373,16 @@ async function brandAction(body) {
     case "restore": if (b.status !== "rejected") throw new UserError("Only rejected ideas can come back."); b.status = "idea"; break;
     case "recheck": b.check = checkName(b, { ...ideaContext(), usedNames: new Set(), usedTickers: new Set() }); queueClash(b); break;
     case "retire": b.status = "retired"; apLog(`${b.name} retired by you`); break;
+    case "remakeArt":
+      if (b.status === "live") throw new UserError("Wait until this try ends.");
+      b.prep = { ...b.prep, artSeed: (b.prep?.artSeed ?? 0) + 1 };
+      delete b.prep.artFailed;
+      b.image = null; b.banner = null;
+      break;
+    case "remakeSite":
+      b.plan = null;
+      if (b.prep) delete b.prep.siteFailed;
+      break;
     case "requeue":
       if (!["retired", "runner"].includes(b.status)) throw new UserError("Only retired brands can go back in the queue.");
       Object.assign(b, { status: "approved", tries: [], nextTryAt: 0 }); break;
@@ -1255,12 +1427,19 @@ async function approveBrand(form) {
     b.imageType = image.type;
     fs.writeFileSync(path.join(IMAGES, b.image), Buffer.from(await image.arrayBuffer()));
   }
-  if (!b.image) throw new UserError("Add a logo first (make one or upload your own).");
+  // no logo uploaded = AUTOPILOT makes logo + banner + website by itself (prepTick)
   if (name !== b.name || symbol !== b.symbol) queueClash(b);
+  const xId = str("xAccountId") || "auto";
+  if (!["auto", "none"].includes(xId) && !xa.find(xId)) throw new UserError("That X account isn't connected.");
+  const direction = str("siteDirection").slice(0, 400);
+  if (direction !== (b.siteDirection ?? "") && b.plan) b.plan = null; // new direction = rewrite the site
   Object.assign(b, {
     name, symbol, description: str("description").slice(0, 1000) || b.description, xPost: str("xPost").slice(0, 280) || b.xPost,
+    launchPost: str("launchPost").slice(0, 280), siteDirection: direction, xAccountId: xId,
     website: optUrl("website"), twitter: optUrl("twitter"), telegram: optUrl("telegram"),
   });
+  slugOf(b);
+  if (b.prep) { delete b.prep.artFailed; delete b.prep.siteFailed; }
   if (b.status !== "approved") {
     b.status = "approved";
     b.approvedAt = Date.now();
@@ -1492,10 +1671,10 @@ if(r.ok)location.href="/";else document.getElementById("e").textContent=(await r
 
 function backup() {
   const images = {};
-  for (const c of [...coins, ...brands]) {
-    if (!c.image || images[c.image]) continue;
-    const p = path.join(IMAGES, c.image);
-    if (fs.existsSync(p)) images[c.image] = fs.readFileSync(p).toString("base64");
+  for (const f of [...coins, ...brands].flatMap((c) => [c.image, c.banner])) {
+    if (!f || images[f]) continue;
+    const p = path.join(IMAGES, f);
+    if (fs.existsSync(p)) images[f] = fs.readFileSync(p).toString("base64");
   }
   return { autopilotBackup: 1, at: new Date().toISOString(), mainSecret, keys, coins: coins.map(({ busy, ...c }) => c), settings, images, brands, activity };
 }
@@ -1528,6 +1707,23 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=86400" });
       return fs.createReadStream(path.join(ROOT, "public", name)).pipe(res);
     }
+    // Coin websites are public
+    if (serveSite(req, res, url)) return;
+    // X sends you back here after logging in (no AUTOPILOT cookie arrives on that hop; the one-time state proves it's yours)
+    if (req.method === "GET" && url.pathname === "/api/x/callback") {
+      let msg;
+      try {
+        if (url.searchParams.get("error")) throw new Error(`X said: ${url.searchParams.get("error")}`);
+        const a = await xa.callback(String(url.searchParams.get("state")), String(url.searchParams.get("code")));
+        if (!settings.defaultX) { settings.defaultX = a.id; writeJson("settings.json", settings); }
+        apLog(`X account @${a.handle} connected`);
+        msg = `@${a.handle} connected`;
+      } catch (e) {
+        msg = e.message;
+      }
+      res.writeHead(302, { Location: `/?x=${encodeURIComponent(msg)}#settings` });
+      return res.end();
+    }
     if (PUBLIC && !loggedIn(req)) {
       if (req.method === "GET" && url.pathname === "/login") {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
@@ -1545,6 +1741,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/login") {
       res.writeHead(302, { Location: "/" });
+      return res.end();
+    }
+    // remember the address you use, so coin sites + the X callback point to it
+    const host = String(req.headers.host || "").toLowerCase();
+    if (PUBLIC && host && settings.lastHost !== host) { settings.lastHost = host; writeJson("settings.json", settings); }
+    if (req.method === "GET" && url.pathname === "/api/x/connect") {
+      let to;
+      try { to = xa.connectUrl(`${baseUrl()}/api/x/callback`); } catch (e) { to = `/?x=${encodeURIComponent(e.message)}#settings`; }
+      res.writeHead(302, { Location: to });
       return res.end();
     }
     if (req.method === "GET" && url.pathname === "/api/backup") {
@@ -1577,7 +1782,12 @@ const server = http.createServer(async (req, res) => {
         main: { address: mainWallet.publicKey.toBase58(), sol: SIMULATE ? 0 : await mainBalance() },
         withdrawTo: settings.withdrawTo, now: Date.now(), coins: coins.map(publicCoin),
         ap: { ...Object.fromEntries(Object.keys(AP_DEFAULTS).map((k) => [k, settings[k]])), status: apStatus, activity: activity.slice(0, 40) },
-        brands: brands.filter((b) => b.status !== "rejected" || Date.now() - b.createdAt < 3 * 86400_000),
+        brands: brands.filter((b) => b.status !== "rejected" || Date.now() - b.createdAt < 3 * 86400_000)
+          .map(({ plan, ...b }) => ({ ...b, hasSite: !!plan, siteBy: plan?.by, siteUrl: plan ? siteUrl(b) : "", xHandle: brandX(b)?.handle ?? "" })),
+        makers: {
+          claude: aiReady(), xApp: xAppReady(), xAccounts: xa.list(), defaultX: settings.defaultX ?? "",
+          xCallback: `${baseUrl()}/api/x/callback`, siteDomain: SITE_DOMAIN, siteBase: SITE_DOMAIN ? `https://<coin>.${SITE_DOMAIN}` : `${baseUrl()}/s/<coin>`,
+        },
       });
     }
     if (req.method === "GET" && url.pathname === "/api/brain") {
@@ -1633,6 +1843,17 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { made: generateIdeas(count, ["safe", "hot"].includes(body.source) ? body.source : "both") });
       }
       if (url.pathname === "/api/brand") return json(res, 200, await brandAction(body));
+      if (url.pathname === "/api/x-account") {
+        const id = String(body.id ?? "");
+        if (!xa.find(id)) throw new UserError("That X account isn't connected.");
+        if (body.action === "default") settings.defaultX = id;
+        else if (body.action === "remove") {
+          xa.remove(id);
+          if (settings.defaultX === id) settings.defaultX = xa.list()[0]?.id ?? "";
+        } else throw new UserError("Unknown action.");
+        writeJson("settings.json", settings);
+        return json(res, 200, { ok: true });
+      }
       if (url.pathname === "/api/wallet-name") {
         const w = String(body.wallet ?? "");
         new PublicKey(w);

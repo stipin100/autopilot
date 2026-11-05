@@ -153,7 +153,10 @@
   .modal.open { display: flex; }
   .modal .box { width: min(760px, 100%); background: var(--panel2); border: 1px solid var(--line2); border-radius: 18px; padding: 22px; }
   .logoed { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
-  .logoed canvas, .logoed img { width: 200px; height: 200px; border-radius: 20px; border: 1px solid var(--line2); background: #000; }
+  .logoed img, .noimgbig { width: 200px; height: 200px; border-radius: 20px; border: 1px solid var(--line2); background: #000; display: block; object-fit: cover; }
+  .noimgbig { display: grid; place-items: center; background: var(--tile); border-style: dashed; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
+  #logoBox img { width: 100%; height: 100%; border: 0; border-radius: 19px; }
+  #logoBox:has(img) { padding: 0; border-style: solid; }
 
   /* coin cards (launches) */
   .form { display: none; } .form.open { display: block; }
@@ -447,6 +450,7 @@ CA: {CA}
           <button class="btn red" id="logoutBtn" hidden>Log out</button>
         </div>
       </div>
+      <div class="card"><h2>X accounts</h2><div id="xCard"></div></div>
       <div class="card"><h2>Connections</h2><div class="todo" id="conns"></div></div>
     </section>
   </main>
@@ -456,24 +460,27 @@ CA: {CA}
 <div class="modal" id="modal">
   <form class="box" id="approveForm">
     <div class="row"><h2 style="margin:0" id="mTitle">Approve</h2><div class="spacer"></div><button type="button" class="btn ghost" id="mClose">✕</button></div>
-    <p class="hint muted small" style="margin:6px 0 16px">Check the name, add a logo, and it joins the launch queue.</p>
+    <p class="hint muted small" style="margin:6px 0 16px">Check the name and approve. AUTOPILOT then makes the logo, banner and website by itself and posts on X at launch.</p>
     <div class="logoed">
       <div>
-        <canvas id="logoCanvas" width="512" height="512"></canvas>
+        <div id="logoBox" class="noimgbig">AUTOPILOT makes it</div>
         <div class="row" style="margin-top:8px">
-          <button type="button" class="btn sm" id="shuffleLogo">Shuffle logo</button>
-          <label class="btn sm" style="margin:0">Upload my own<input type="file" id="ownLogo" accept="image/png,image/jpeg,image/gif,image/webp" hidden></label>
+          <label class="btn sm" style="margin:0">Use my own logo<input type="file" id="ownLogo" accept="image/png,image/jpeg,image/gif,image/webp" hidden></label>
+          <button type="button" class="btn sm ghost" id="clearLogo" hidden>Let AUTOPILOT make it</button>
         </div>
-        <div class="muted small" id="logoNote" style="margin-top:6px">Made for you - flat mark, one accent, no words.</div>
+        <div class="muted small" id="logoNote" style="margin-top:6px"></div>
       </div>
       <div class="grid" style="grid-template-columns:1fr 1fr">
         <div><label>Name</label><input name="name" maxlength="32"></div>
         <div><label>Ticker</label><input name="symbol" maxlength="11"></div>
         <div class="full"><label>Description (shown on Pump.fun)</label><textarea name="description" maxlength="1000"></textarea></div>
-        <div><label>Website (optional)</label><input name="website" placeholder="https://..."></div>
-        <div><label>X link (optional)</label><input name="twitter" placeholder="https://x.com/..."></div>
-        <div class="full"><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
-        <div class="full"><label>X post after launch ({CA} {WEBSITE} {LINK} filled in)</label><textarea name="xPost" maxlength="280"></textarea></div>
+        <div class="full"><label>Website direction for Claude (optional - e.g. "make it feel like a bank app")</label><input name="siteDirection" maxlength="400"></div>
+        <div><label>Posts from X account</label><select name="xAccountId" id="mX"></select></div>
+        <div><label>Own website instead (optional)</label><input name="website" placeholder="https://..."></div>
+        <div class="full"><label>Launch post on X (~30s before launch; empty = name, pitch + website)</label><textarea name="launchPost" maxlength="280" placeholder="{NAME} ${TICKER} ..."></textarea></div>
+        <div class="full"><label>CA reply after launch ({CA} {WEBSITE} {LINK} filled in)</label><textarea name="xPost" maxlength="280"></textarea></div>
+        <div><label>X link (optional, else the launch post)</label><input name="twitter" placeholder="https://x.com/..."></div>
+        <div><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
       </div>
     </div>
     <div class="err" id="mErr"></div>
@@ -695,9 +702,13 @@ function queueList() {
 }
 function queueItem(b, controls) {
   const now = Date.now() + skew;
-  const when = b.tries.length ? (b.nextTryAt > now ? `retry ${b.tries.length + 1} in ${dur(b.nextTryAt - now)}` : `retry ${b.tries.length + 1} is due`) : "new · first try";
-  return `<div class="qi">${brandImg(b)}<div class="t"><b>${esc(b.name)}</b> <span class="muted">$${esc(b.symbol)}</span><div>${when}${b.word ? ` · word "${esc(b.word)}"` : ""}</div></div>
-    ${controls ? `<div class="row">${!b.tries.length ? `<button class="btn sm" data-b="up" data-id="${b.id}">↑</button><button class="btn sm" data-b="down" data-id="${b.id}">↓</button>` : ""}<button class="btn sm" data-edit="${b.id}">Edit</button><button class="btn sm red" data-b="retire" data-id="${b.id}">Retire</button></div>` : ""}</div>`;
+  const p = b.prep ?? {};
+  const making = !b.image ? (p.art === "failed" ? `logo failed: ${esc(p.artFailed ?? "")}` : "making logo + banner…") : !b.hasSite && !b.website ? "writing website…" : "";
+  const when = making || (b.tries.length ? (b.nextTryAt > now ? `retry ${b.tries.length + 1} in ${dur(b.nextTryAt - now)}` : `retry ${b.tries.length + 1} is due`) : "ready · first try");
+  const site = b.siteUrl ? ` · <a href="${esc(b.siteUrl)}" target="_blank" rel="noopener">website</a>${b.siteBy === "claude" ? "" : " (template)"}` : b.website ? ` · <a href="${esc(b.website)}" target="_blank" rel="noopener">website</a>` : "";
+  const x = b.xAccountId === "none" ? " · no X" : b.xHandle ? ` · X @${esc(b.xHandle)}` : " · X: none connected";
+  return `<div class="qi">${brandImg(b)}<div class="t"><b>${esc(b.name)}</b> <span class="muted">$${esc(b.symbol)}</span><div>${when}${site}${x}</div></div>
+    ${controls ? `<div class="row">${!b.tries.length ? `<button class="btn sm" data-b="up" data-id="${b.id}">↑</button><button class="btn sm" data-b="down" data-id="${b.id}">↓</button>` : ""}<button class="btn sm" data-edit="${b.id}">Edit</button><button class="btn sm" data-b="remakeArt" data-id="${b.id}" title="Make a new logo + banner">Remake logo</button>${b.hasSite ? `<button class="btn sm" data-b="remakeSite" data-id="${b.id}">Remake site</button>` : ""}<button class="btn sm red" data-b="retire" data-id="${b.id}">Retire</button></div>` : ""}</div>`;
 }
 
 function renderHome(now) {
@@ -800,8 +811,22 @@ function renderSettings() {
   $("#logoutBtn").hidden = !state.public;
   if (document.activeElement !== $("#withdrawTo") && !$("#withdrawTo").dataset.touched) $("#withdrawTo").value = state.withdrawTo;
   const ok = (b, yes, no) => `<div><i class="${b ? "" : "r"}"></i><span>${b ? yes : no}</span></div>`;
-  $("#conns").html = ok(state.pinata, "Pinata - image + details upload ready", "Pinata key missing (PINATA_JWT)")
-    + ok(state.x, "X keys set - posts the CA after launch", "X keys not set - you post with \"Copy CA post\"")
+  const m = state.makers;
+  $("#xCard").html = `
+    <div class="row" style="margin-bottom:10px"><span class="muted small" style="flex:1">${m.xApp ? "Your X app is set. Log in each account once - AUTOPILOT posts the launch post ~30s before launch and replies with the CA." : "Add your X app's keys first (see the steps below), then connect accounts here."}</span>
+    <a class="btn lime sm" href="/api/x/connect" ${m.xApp ? "" : 'aria-disabled="true" onclick="event.preventDefault();toast(\'Add X_CLIENT_ID + X_CLIENT_SECRET first\')"'}>+ Connect X account</a></div>
+    <div class="q">${m.xAccounts.length ? m.xAccounts.map((a) => `<div class="qi"><div class="t"><b>@${esc(a.handle)}</b> <span class="muted">${esc(a.name)}</span><div>${a.id === m.defaultX ? "default account - new coins post from it" : "connected"}</div></div><div class="row">${a.id !== m.defaultX ? `<button class="btn sm" data-xa="default" data-id="${esc(a.id)}">Make default</button>` : ""}<button class="btn sm red" data-xa="remove" data-id="${esc(a.id)}">Disconnect</button></div></div>`).join("") : `<div class="empty">No X accounts connected yet.</div>`}</div>
+    <details style="margin-top:12px"><summary>How to set up your X app (one time)</summary><ol class="small muted" style="line-height:1.8">
+      <li>Go to <b>developer.x.com</b> → Projects &amp; Apps → your app → <b>User authentication settings</b> → Set up.</li>
+      <li>App permissions: <b>Read and write</b>. Type of App: <b>Web App</b>.</li>
+      <li>Callback URL: <code class="mono">${esc(m.xCallback)}</code> &nbsp;Website: any of your sites.</li>
+      <li>Save, then open <b>Keys and tokens</b> → OAuth 2.0 <b>Client ID</b> and <b>Client Secret</b>.</li>
+      <li>On Render → autopilot → Environment, add <code>X_CLIENT_ID</code> and <code>X_CLIENT_SECRET</code>. It restarts by itself.</li>
+      <li>Back here: <b>+ Connect X account</b>, log in. Repeat for every account.</li></ol></details>`;
+  $("#conns").html = ok(m.claude, "Claude key set - Claude writes every website + designs every logo", "No Claude key yet - sites use a template, logos a built-in design (add ANTHROPIC_API_KEY)")
+    + ok(true, `Coin websites live at ${esc(m.siteBase)}`, "")
+    + ok(state.pinata, "Pinata - image + details upload ready", "Pinata key missing (PINATA_JWT)")
+    + ok(state.x || m.xApp, m.xApp ? "X app set - connect accounts above" : "Old X keys set - posts the CA after launch", "X not set up - you post with \"Copy CA post\"")
     + ok(state.customRpc, "Own Solana RPC set", "Using the free public RPC (slow, limited)")
     + ok(brainData?.status?.connected ?? true, "Brain feed (PumpPortal) connected", "Brain feed reconnecting");
 }
@@ -993,91 +1018,70 @@ $("#ownForm").onsubmit = async (e) => {
   catch (err) { toast(err.message); }
 };
 
-// ---------- logo maker: dark or light ground, faint dot grid, one cream mark, one accent dot, no words ----------
-const GROUNDS = [["#121212", "#ece4d6"], ["#0f1114", "#ece4d6"], ["#161616", "#ece4d6"], ["#f3f2ee", "#1b1b1b"], ["#1e3a2b", "#ece4d6"], ["#1b2742", "#ece4d6"], ["#c75b39", "#f6efe3"]];
-const ACCENTS = ["#f5b43a", "#22c97f", "#9be35a", "#2ec4b6", "#5aa9ff", "#ff6b8a", "#d5f26c"];
-function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
-function hash(str) { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; }
-let logoSeed = 0, ownLogoFile = null;
-function drawLogo(name, seed) {
-  const cv = $("#logoCanvas"), g = cv.getContext("2d"), S = 512, r = rng(hash(name) + seed * 7919);
-  const [bg, ink] = GROUNDS[Math.floor(r() * GROUNDS.length)];
-  let acc = ACCENTS[Math.floor(r() * ACCENTS.length)];
-  if (bg === "#c75b39" || bg === "#1e3a2b") acc = "#f5b43a";
-  g.fillStyle = bg; g.fillRect(0, 0, S, S);
-  g.fillStyle = ink; g.globalAlpha = 0.07;
-  for (let x = 16; x < S; x += 24) for (let y = 16; y < S; y += 24) { g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.fill(); }
-  g.globalAlpha = 1;
-  const c = S / 2, lw = 34;
-  g.strokeStyle = ink; g.fillStyle = ink; g.lineWidth = lw; g.lineCap = "round"; g.lineJoin = "round";
-  const dot = (x, y, rad = 26) => { g.fillStyle = acc; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill(); g.fillStyle = ink; };
-  const shape = Math.floor(r() * 9);
-  g.beginPath();
-  if (shape === 0) { g.arc(c, c, 120, 0.25 * Math.PI, 1.9 * Math.PI); g.stroke(); dot(c + 120 * Math.cos(0.25 * Math.PI) + 10, c + 120 * Math.sin(0.25 * Math.PI) + 10); }
-  else if (shape === 1) { g.roundRect(c - 115, c - 115, 230, 230, 56); g.stroke(); dot(c, c); }
-  else if (shape === 2) { g.moveTo(c - 125, c + 95); g.lineTo(c, c - 120); g.lineTo(c + 125, c + 95); g.closePath(); g.stroke(); dot(c, c + 30, 24); }
-  else if (shape === 3) { for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(c - 110 + i * 70, c - 100); g.lineTo(c - 40 + i * 70, c); g.lineTo(c - 110 + i * 70, c + 100); g.stroke(); } dot(c + 130, c, 22); }
-  else if (shape === 4) { g.moveTo(c - 120, c + 80); g.quadraticCurveTo(c - 120, c - 110, c, c - 110); g.quadraticCurveTo(c + 120, c - 110, c + 120, c + 80); g.stroke(); dot(c, c + 80, 30); }
-  else if (shape === 5) { g.moveTo(c, c - 135); g.lineTo(c + 135, c); g.lineTo(c, c + 135); g.lineTo(c - 135, c); g.closePath(); g.stroke(); dot(c + 135, c, 24); }
-  else if (shape === 6) { [[-90, 60], [0, -10], [90, -80]].forEach(([dx, h]) => { g.beginPath(); g.moveTo(c + dx, c + 110); g.lineTo(c + dx, c + h); g.stroke(); }); dot(c + 90, c - 135, 24); }
-  else if (shape === 7) { for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; i ? g.lineTo(c + 125 * Math.cos(a), c + 125 * Math.sin(a)) : g.moveTo(c + 125 * Math.cos(a), c + 125 * Math.sin(a)); } g.closePath(); g.stroke(); dot(c, c, 30); }
-  else { g.arc(c - 50, c, 85, 0, 7); g.stroke(); g.beginPath(); g.arc(c + 60, c, 85, -1.1, 1.1); g.stroke(); dot(c + 145, c - 30, 22); }
+// ---------- approve / edit a brand ----------
+let ownLogoFile = null;
+function showLogo(src, note) {
+  $("#logoBox").innerHTML = src ? `<img src="${esc(src)}" alt="">` : "AUTOPILOT makes it";
+  $("#logoNote").textContent = note;
+  $("#clearLogo").hidden = !ownLogoFile;
 }
 function openApprove(id) {
   const b = state.brands.find((x) => x.id === id);
   if (!b) return;
   const f = $("#approveForm");
   f.dataset.id = id;
-  for (const k of ["name", "symbol", "description", "website", "twitter", "telegram", "xPost"]) f.elements[k].value = b[k] ?? "";
+  for (const k of ["name", "symbol", "description", "website", "twitter", "telegram", "xPost", "launchPost", "siteDirection"]) f.elements[k].value = b[k] ?? "";
+  const m = state.makers;
+  const def = m.xAccounts.find((a) => a.id === m.defaultX);
+  $("#mX").innerHTML = `<option value="auto">${def ? `Default (@${esc(def.handle)})` : "Default (none connected yet)"}</option>`
+    + m.xAccounts.map((a) => `<option value="${esc(a.id)}">@${esc(a.handle)}</option>`).join("") + `<option value="none">Don't post on X</option>`;
+  $("#mX").value = b.xAccountId && [...$("#mX").options].some((o) => o.value === b.xAccountId) ? b.xAccountId : "auto";
   $("#mTitle").textContent = b.status === "idea" ? `Approve ${b.name}` : `Edit ${b.name}`;
   $("#mSave").textContent = b.status === "approved" ? "Save" : "Approve + add to queue";
   $("#mErr").textContent = "";
   ownLogoFile = null;
-  logoSeed = 0;
-  if (b.image) {
-    const img = new Image();
-    img.onload = () => { const g = $("#logoCanvas").getContext("2d"); g.clearRect(0, 0, 512, 512); g.drawImage(img, 0, 0, 512, 512); };
-    img.src = `/img/${b.image}`;
-    f.dataset.keep = "1";
-    $("#logoNote").textContent = "Current logo. Shuffle or upload to change it.";
-  } else {
-    f.dataset.keep = "";
-    drawLogo(b.name, 0);
-    $("#logoNote").textContent = "Made for you - flat mark, one accent, no words.";
-  }
+  if (b.image) showLogo(`/img/${b.image}`, "Current logo. Use your own to change it, or press Remake logo in the queue.");
+  else showLogo("", m.claude ? "Claude designs the logo + banner after you approve." : "A built-in design is made after you approve (add a Claude key for custom ones).");
   $("#modal").classList.add("open");
 }
 const closeModal = () => $("#modal").classList.remove("open");
 $("#mClose").onclick = closeModal; $("#mCancel").onclick = closeModal;
 $("#modal").onclick = (e) => { if (e.target.id === "modal") closeModal(); };
-$("#shuffleLogo").onclick = () => { ownLogoFile = null; $("#approveForm").dataset.keep = ""; drawLogo($("#approveForm").elements.name.value || "x", ++logoSeed); $("#logoNote").textContent = `Made for you - version ${logoSeed + 1}.`; };
 $("#ownLogo").onchange = () => {
   const file = $("#ownLogo").files[0];
   if (!file) return;
   ownLogoFile = file;
-  $("#approveForm").dataset.keep = "";
-  const img = new Image();
-  img.onload = () => { const g = $("#logoCanvas").getContext("2d"); g.clearRect(0, 0, 512, 512); g.drawImage(img, 0, 0, 512, 512); URL.revokeObjectURL(img.src); };
-  img.src = URL.createObjectURL(file);
-  $("#logoNote").textContent = `Your logo: ${file.name}`;
+  showLogo(URL.createObjectURL(file), `Your logo: ${file.name}`);
 };
+$("#clearLogo").onclick = () => { ownLogoFile = null; $("#ownLogo").value = ""; showLogo("", "AUTOPILOT makes the logo after you approve."); };
 $("#approveForm").onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
   const fd = new FormData(f);
   fd.set("id", f.dataset.id);
   if (ownLogoFile) fd.set("image", ownLogoFile);
-  else if (!f.dataset.keep) fd.set("image", await new Promise((res) => $("#logoCanvas").toBlob(res, "image/png")), "logo.png");
   $("#mSave").disabled = true;
   try {
     const r = await fetch("/api/brand-approve", { method: "POST", body: fd });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     closeModal();
-    toast("Saved - it's in the launch queue");
+    toast("Approved - logo, banner + website are being made");
     load();
   } catch (err) { $("#mErr").textContent = err.message; } finally { $("#mSave").disabled = false; }
 };
+
+// ---------- X accounts ----------
+try {
+  const xmsg = new URLSearchParams(location.search).get("x");
+  if (xmsg) { setTimeout(() => toast(xmsg), 600); history.replaceState(null, "", "/"); setTimeout(() => go("settings"), 0); }
+} catch {}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-xa]");
+  if (!b) return;
+  if (b.dataset.xa === "remove" && !confirm("Disconnect this X account? Coins set to it won't post until you pick another.")) return;
+  try { await post("/api/x-account", { id: b.dataset.id, action: b.dataset.xa }); load(); } catch (err) { toast(err.message); }
+});
 
 // ---------- manual coin form ----------
 const form = $("#form");

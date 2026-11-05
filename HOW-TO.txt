@@ -91,3 +91,28 @@ AUTOPILOT (Home tab)
 RESULTS  profit per day, per brand, per pair + dev buy, every launch, Export CSV.
 RADAR    every outside wallet that bought your coins: block-0 snipers, bundlers,
          repeat traders. Tap "+ name" to label a wallet.
+
+=====================================================================
+NEW: LOGOS, BANNERS, WEBSITES + X POSTING BY THEMSELVES
+=====================================================================
+When you APPROVE a coin, AUTOPILOT now makes by itself:
+  - logo (512x512) + banner (1500x500)
+  - a full website at  <your AUTOPILOT address>/s/<ticker>
+    (the CA + Buy button appear on it by themselves after launch)
+Then at launch it posts on X ~30 seconds before, and replies with the CA.
+
+Works right away WITHOUT keys (built-in logo designs + template website text).
+Add these on Render -> autopilot -> Environment when you're ready:
+
+  ANTHROPIC_API_KEY   from console.anthropic.com -> API keys (add a few $ credit)
+                      -> Claude writes every website + designs every logo
+                         (about 15-30 US cents per coin)
+  X_CLIENT_ID         } from your X developer app (developer.x.com)
+  X_CLIENT_SECRET     } Settings tab -> "How to set up your X app" has the steps
+                      -> then press "+ Connect X account" for each account
+  SITE_DOMAIN         optional, e.g. coins.degenlab.fun -> sites at <ticker>.coins.degenlab.fun
+                      (needs a wildcard DNS record pointing at Render - ask Claude to set it up)
+
+In the launch queue: Remake logo / Remake site make new ones. In Approve you can
+pick which X account posts, write the launch post yourself, or give Claude a
+"website direction".
