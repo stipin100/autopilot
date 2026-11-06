@@ -33,5 +33,15 @@
     "tagline": "see the rug before it moves",
     "description": "Scans every new coin for red flags in seconds, before you ape. Dev wallets, bundles, holders, all in one look.",
     "whatIf": "What if you saw the rug before it moved?"
-  }
+  },
+  { "name": "Agent Paid", "symbol": "AGPAID", "tagline": "your agent pays, you approve", "description": "An AI agent that sends crypto payments for you: split bills, pay friends, tip creators, all from one chat.", "whatIf": "What if your agent paid the bill for you?" },
+  { "name": "Pad Pay", "symbol": "PADPAY", "tagline": "every launch pays you back", "description": "A launchpad that pays creators: every coin's fees stream back to the wallet that launched it, claimed automatically.", "whatIf": "What if every launch paid you back?" },
+  { "name": "Chart Agent", "symbol": "CHARTAGENT", "tagline": "every chart, explained", "description": "Paste any chart and the agent explains it in plain English: trend, volume, holders, in ten seconds.", "whatIf": "What if every chart could talk?" },
+  { "name": "Bot Shield", "symbol": "BOTSHIELD", "tagline": "snipers hit a wall", "description": "Protects your launch from sniper bots: spots bundles and block-zero buyers the moment you go live.", "whatIf": "What if snipers hit a wall?" },
+  { "name": "Meme Lab", "symbol": "MEMELAB", "tagline": "one prompt, a whole meme kit", "description": "An AI studio that makes memes, stickers and banners for any coin from one prompt.", "whatIf": "What if one prompt made your whole meme kit?" },
+  { "name": "Thread Agent", "symbol": "THREADAI", "tagline": "threads that write themselves", "description": "Turns any idea into a ready-to-post X thread, hooks and all.", "whatIf": "What if your threads wrote themselves?" },
+  { "name": "Holder Bot", "symbol": "HOLDERBOT", "tagline": "never miss a milestone", "description": "A Telegram bot that pings your holders on every milestone, buy wall and new high.", "whatIf": "What if your holders never missed a pump?" },
+  { "name": "Fee Radar", "symbol": "FEERADAR", "tagline": "no fee left behind", "description": "Finds unclaimed creator fees across all your coins and claims them in one tap.", "whatIf": "What if no fee was ever left behind?" },
+  { "name": "Narrative AI", "symbol": "NARRATIVE", "tagline": "know the next narrative first", "description": "Reads X and Pump.fun all day and tells you which narrative is heating up next.", "whatIf": "What if you knew the next narrative first?" },
+  { "name": "Agent Market", "symbol": "AGENTMKT", "tagline": "hire an agent in one click", "description": "A marketplace where you hire AI agents by the job and pay per task.", "whatIf": "What if hiring an agent took one click?" }
 ]

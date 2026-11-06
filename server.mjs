@@ -2383,6 +2383,27 @@ function importSeed() {
 }
 importSeed();
 
+/** seed-settings.json: schedule rules the owner asked for in a chat, applied once (by id). Only schedule rules, never money switches. */
+function importSeedSettings() {
+  const f = path.join(ROOT, "seed-settings.json");
+  if (!fs.existsSync(f)) return;
+  let s;
+  try { s = JSON.parse(fs.readFileSync(f, "utf8")); } catch { return console.error("seed-settings.json is not valid JSON"); }
+  settings.seedSettingsApplied ??= [];
+  if (!s?.id || settings.seedSettingsApplied.includes(s.id)) return;
+  const allowed = ["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX"];
+  const body = Object.fromEntries(Object.entries(s.settings ?? {}).filter(([k]) => allowed.includes(k)));
+  try {
+    saveAutopilot(body);
+  } catch (e) {
+    return console.error("seed-settings.json:", e.message);
+  }
+  settings.seedSettingsApplied.push(s.id);
+  writeJson("settings.json", settings);
+  apLog(`Schedule set from the chat: ${Object.entries(body).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+}
+importSeedSettings();
+
 brain.start(); // market study runs all the time (read-only)
 if (PUBLIC) {
   server.listen(PORT, "0.0.0.0", () => {
