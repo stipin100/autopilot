@@ -1548,6 +1548,11 @@ const av = (img, cls = "av") => img ? `<img class="${cls}" src="/img/${esc(img)}
 const inT = (ms) => ms <= 60000 ? "now" : `in ${dur(ms).replace(/ \d+s$/, "")}`;
 const sol = (n, d = 3) => `${fmt(n, d)}<small> SOL</small>`;
 const hm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }); // 24h, fits the time column
+/** "Website ↗" for a coin whose site is ready (opens in a new tab), or a quiet note while it's being made. */
+const siteBtn = (b) => {
+  const url = b.siteUrl || b.website;
+  return url ? `<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">Website ↗</a>` : `<span class="muted small" style="white-space:nowrap">site soon…</span>`;
+};
 
 /** When every booked coin goes out: queue order, the gap between coins, each coin's own set time / retry time. */
 function projected(now) {
@@ -1662,7 +1667,7 @@ function renderToday(now) {
   $("#tComingNote").textContent = plan.length ? `${plan.length} booked · one every ${ap.minGapMinutes} min` : "";
   $("#tComing").html = plan.length ? plan.slice(0, 6).map((p, i) => `<div class="tli ${i ? "" : "first"}"><div class="tm"><b>${hm(p.live)}</b><span>${i ? inT(p.live - now) : "next"}</span></div>${av(p.b.image)}
       <div class="nm"><b>${esc(p.b.name)}</b> <span class="tk">$${esc(p.b.symbol)}</span><div>${brandLine(p.b, now)}</div></div>
-      <button class="btn sm" data-b="launchNow" data-id="${p.b.id}">Launch now</button></div>`).join("") + (plan.length > 6 ? `<button class="btn bigbtn" style="margin-top:8px" data-go="schedule">See all ${plan.length} →</button>` : "")
+      <div class="row" style="flex-wrap:nowrap">${siteBtn(p.b)}<button class="btn sm" data-b="launchNow" data-id="${p.b.id}">Launch now</button></div></div>`).join("") + (plan.length > 6 ? `<button class="btn bigbtn" style="margin-top:8px" data-go="schedule">See all ${plan.length} →</button>` : "")
     : `<div class="empty">Nothing booked. <a href="#" data-newcoin>Start a new coin</a> or approve some ideas.</div>`;
   // out today
   const outs = todayRows(), byId = coinById();
@@ -1750,7 +1755,7 @@ function renderSchedule(now) {
       <div class="nm"><b>${esc(b.name)}</b> <span class="tk">$${esc(b.symbol)}</span><div>${brandLine(b, now)}</div></div>
       <div class="row" style="flex-wrap:nowrap">${canMove ? `<button class="btn sm" data-b="up" data-id="${b.id}">↑</button><button class="btn sm" data-b="down" data-id="${b.id}">↓</button>` : ""}
         <button class="btn sm" data-settime="${b.id}">${b.notBefore > now ? "Change time" : "Set time"}</button>${b.notBefore > now ? `<button class="btn sm ghost" data-b="clearTime" data-id="${b.id}">✕ time</button>` : ""}
-        <button class="btn sm" data-b="launchNow" data-id="${b.id}">Now</button><button class="btn sm red" data-b="retire" data-id="${b.id}">✕</button></div></div>`;
+        ${siteBtn(b)}<button class="btn sm" data-b="launchNow" data-id="${b.id}">Now</button><button class="btn sm red" data-b="retire" data-id="${b.id}">✕</button></div></div>`;
   }).join("") : `<div class="empty">Nothing booked yet. Approve ideas or <a href="#" data-newcoin>start a new coin</a>.</div>`;
 }
 
