@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Signal Pad",
+    "symbol": "SIGNALPAD",
+    "tagline": "hear the trend first",
+    "description": "An AI agent that watches X and pings you the moment a new narrative starts. Hear the trend before the timeline does.",
+    "whatIf": "What if your phone buzzed before the trend did?"
+  },
+  {
+    "name": "Hive Agent",
+    "symbol": "HIVEAGENT",
+    "tagline": "one prompt, a hundred workers",
+    "description": "A swarm of AI agents that split any job, run it together and report back in seconds. One prompt, a hundred workers.",
+    "whatIf": "What if one prompt hired a hundred agents?"
+  },
+  {
+    "name": "Wallet Lens",
+    "symbol": "WALLETLENS",
+    "tagline": "every wallet has a story",
+    "description": "Paste any wallet and get its whole story in plain English: what it bought, sold and who it follows.",
+    "whatIf": "What if every wallet came with a story?"
+  },
+  {
+    "name": "Ghost Inbox",
+    "symbol": "GHOSTINBOX",
+    "tagline": "on-chain whispers",
+    "description": "Send an anonymous message to any Solana wallet. No names, no accounts, just on-chain whispers.",
+    "whatIf": "What if you could DM any wallet?"
+  },
+  {
+    "name": "Rug Radar",
+    "symbol": "RUGRADAR",
+    "tagline": "see the rug before it moves",
+    "description": "Scans every new coin for red flags in seconds, before you ape. Dev wallets, bundles, holders, all in one look.",
+    "whatIf": "What if you saw the rug before it moved?"
+  }
+]

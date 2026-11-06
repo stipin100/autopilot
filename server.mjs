@@ -2160,6 +2160,37 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+/**
+ * seed-ideas.json (in the code): coins to add without logging in. Each ticker is added once, already approved,
+ * so it's booked and gets its logo, banner and website made. Launching still needs autopilot on + spending lock off.
+ */
+function importSeed() {
+  const f = path.join(ROOT, "seed-ideas.json");
+  if (!fs.existsSync(f)) return;
+  let list;
+  try { list = JSON.parse(fs.readFileSync(f, "utf8")); } catch { return console.error("seed-ideas.json is not valid JSON"); }
+  settings.seeded ??= [];
+  let added = 0;
+  for (const it of Array.isArray(list) ? list : []) {
+    const name = String(it.name ?? "").trim().slice(0, 32), symbol = String(it.symbol ?? "").trim().toUpperCase().replace(/^\$/, "");
+    if (!name || !/^[A-Z0-9]{1,10}$/.test(symbol) || settings.seeded.includes(symbol)) continue;
+    settings.seeded.push(symbol);
+    if (brands.some((b) => b.symbol === symbol && b.status !== "rejected")) continue; // already there
+    const b = newBrand({
+      name, symbol, description: String(it.description ?? "").slice(0, 1000), tagline: String(it.tagline ?? "").slice(0, 80), whatIf: String(it.whatIf ?? "").slice(0, 140),
+      word: "", why: "added for you by Claude", xPost: `${name} $${symbol} is live\n\nCA: {CA}`, xAccountId: "auto",
+      check: checkName({ name, symbol }, ideaContext()),
+    }, "you");
+    Object.assign(b, { status: "approved", approvedAt: Date.now(), order: Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1)) });
+    slugOf(b);
+    apLog(`${name} $${symbol} added + approved from the coin list - making its logo, banner and website`);
+    added++;
+  }
+  writeJson("settings.json", settings);
+  if (added) save();
+}
+importSeed();
+
 brain.start(); // market study runs all the time (read-only)
 if (PUBLIC) {
   server.listen(PORT, "0.0.0.0", () => {
