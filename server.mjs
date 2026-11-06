@@ -132,6 +132,7 @@ const AP_DEFAULTS = {
   autopilot: false, spendLock: true, devBuySol: 0.5, leadMinutes: 3, minGapMinutes: 30, triesPerDay: 2, retryGapMinutes: 240,
   maxDays: 2, maxLaunchesPerDay: 10, windowStart: 0, windowEnd: 24, tzOffset: 0, checkMinutes: 5, minWallets: 15,
   takeProfitX: 2, autoClaimSol: 0.02, autoSweep: false, floatTarget: 1.5, sweepAbove: 0.5,
+  paused: false, dailyGoal: 1, ideasPerDay: 0,
 };
 const settings = { withdrawTo: "", walletNames: {}, ...AP_DEFAULTS, ...readJson("settings.json", {}) };
 const brands = readJson("brands.json", []); // coin ideas -> approved queue -> live -> runner / retired
@@ -1132,7 +1133,8 @@ function inWindow() {
 function nextBrand() {
   const now = Date.now();
   // ready = has a logo and its website isn't still being written
-  const ready = brands.filter((b) => b.status === "approved" && b.image && (b.plan || b.website) && b.prep?.art !== "working" && b.prep?.site !== "working");
+  const ready = brands.filter((b) => b.status === "approved" && b.image && (b.plan || b.website) && b.prep?.art !== "working" && b.prep?.site !== "working"
+    && (b.notBefore ?? 0) <= now); // a coin you gave a set time waits for it
   const retries = ready.filter((b) => b.tries.length && (b.nextTryAt ?? 0) <= now).sort((a, b) => a.nextTryAt - b.nextTryAt);
   if (retries.length) return retries[0];
   return ready.filter((b) => !b.tries.length).sort((a, b) => a.order - b.order || a.approvedAt - b.approvedAt)[0];
@@ -1283,7 +1285,9 @@ async function autopilotTick() {
 
   const s = settings;
   const now = Date.now();
+  autoIdeas();
   if (!s.autopilot) return void (apStatus = "Autopilot is off");
+  if (s.paused) return void (apStatus = "Paused - nothing new goes out");
   if (s.spendLock) return void (apStatus = "Spending lock is on - nothing new gets funded");
   if (coins.some((c) => c.auto && PRE_LAUNCH.includes(c.stage))) return void (apStatus = "A launch is getting ready");
   if (!inWindow()) return void (apStatus = `Outside launch hours (${s.windowStart}:00-${s.windowEnd}:00 your time)`);
@@ -1305,6 +1309,92 @@ async function autopilotTick() {
   apStatus = `Launching ${b.name}`;
   launchBrand(b);
   save();
+}
+
+/**
+ * Tidy up: brings leftover SOL from finished coins (duds, stopped, failed, sold) back to the main wallet.
+ * Coins still live or getting ready are left alone. Each wallet keeps its 0.003 SOL fee reserve unless stopped.
+ */
+async function tidyUp() {
+  let sol = 0, wallets = 0;
+  for (const c of coins) {
+    const done = ["dud", "stopped", "failed"].includes(c.stage) || (c.stage === "earning" && c.soldAt);
+    const keep = c.stage === "stopped" ? 0 : COIN_RESERVE_LAMPORTS / SOL; // the fee-claim reserve stays
+    if (!done || c.busy || (c.stats?.walletSol ?? 0) < keep + 0.0005) continue;
+    c.busy = true;
+    try {
+      const got = await withdrawCoin(c);
+      if (got > 0.0001) { sol += got; wallets++; log(c, `Tidy up: ${got.toFixed(4)} SOL back to the main wallet`); }
+    } catch (e) {
+      log(c, `Tidy up skipped: ${e.message}`);
+    } finally {
+      c.busy = false;
+    }
+  }
+  mainBalCache.at = 0;
+  save();
+  apLog(wallets ? `Tidy up: collected ${sol.toFixed(4)} SOL from ${wallets} finished coin${wallets > 1 ? "s" : ""}` : "Tidy up: nothing to collect");
+  return { sol: +sol.toFixed(4), wallets };
+}
+
+// ---------- System health (Accounts → Connections) ----------
+let healthCache = { at: 0, data: null };
+async function health() {
+  if (Date.now() - healthCache.at < 30_000 && healthCache.data) return healthCache.data;
+  const time = async (fn) => {
+    const t = Date.now();
+    try { await fn(); return { ok: true, ms: Date.now() - t }; } catch (e) { return { ok: false, ms: Date.now() - t, error: e.message.slice(0, 80) }; }
+  };
+  const [rpcT, jupT, pumpT, pinT] = await Promise.all([
+    time(() => rpc.getSlot()),
+    time(() => priceInSol("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6)),
+    time(() => chainData()),
+    PINATA_JWT ? time(async () => {
+      const r = await fetch("https://api.pinata.cloud/data/testAuthentication", { headers: { Authorization: `Bearer ${PINATA_JWT}` } });
+      if (!r.ok) throw new Error(`Pinata said ${r.status}`);
+    }) : { ok: false, error: "PINATA_JWT missing" },
+  ]);
+  const need = settings.devBuySol + FUND_EXTRA_SOL + 0.002;
+  const bal = SIMULATE ? 0 : await mainBalance();
+  const data = {
+    services: [
+      { name: "Claude (ideas, logos, sites)", ok: aiReady(), note: aiReady() ? "connected" : "add ANTHROPIC_API_KEY" },
+      { name: "X app (posting)", ok: xAppReady(), note: xAppReady() ? `${xa.list().length} account${xa.list().length === 1 ? "" : "s"} connected` : "add X_CLIENT_ID + X_CLIENT_SECRET" },
+      { name: "Brain feed (PumpPortal)", ok: brain.summary().status.connected, note: brain.summary().status.trades ? "live + trade data" : brain.summary().status.connected ? "live · add PUMPPORTAL_API_KEY for trade data" : "reconnecting" },
+      { name: "Pinata (coin details)", ok: pinT.ok, note: pinT.ok ? "working" : pinT.error },
+      { name: "Coin websites", ok: true, note: SITE_DOMAIN ? `<coin>.${SITE_DOMAIN}` : `${baseUrl()}/s/<coin>` },
+      { name: "Own Solana RPC", ok: !!process.env.SOLANA_RPC_URL, note: process.env.SOLANA_RPC_URL ? "set" : "using the free public one" },
+    ],
+    system: [
+      { name: "Solana RPC", ok: rpcT.ok, note: rpcT.ok ? `${rpcT.ms} ms` : rpcT.error },
+      { name: "Jupiter swaps", ok: jupT.ok, note: jupT.ok ? `${jupT.ms} ms` : jupT.error },
+      { name: "Pump program", ok: pumpT.ok, note: pumpT.ok ? "reachable" : pumpT.error },
+      { name: "Runway", ok: SIMULATE || bal >= need, warn: !SIMULATE && bal >= need && bal < need * 3, note: SIMULATE ? "practice mode" : `${Math.floor(bal / need)} launch${Math.floor(bal / need) === 1 ? "" : "es"} from ${bal.toFixed(2)} SOL` },
+      { name: "Profit wallet", ok: !!settings.withdrawTo, note: settings.withdrawTo ? "set" : "not set (Wallets)" },
+      { name: "Launching", ok: settings.autopilot && !settings.paused && !settings.spendLock, warn: true, note: !settings.autopilot ? "autopilot off" : settings.paused ? "paused" : settings.spendLock ? "spending locked" : "on" },
+      { name: "Login code", ok: !PUBLIC || totp.enabled, warn: true, note: totp.enabled ? "on" : "off (More → Security)" },
+    ],
+  };
+  healthCache = { at: Date.now(), data };
+  return data;
+}
+
+/** "New ideas a day": spreads that many brain ideas over the day (they wait in Ideas for your yes / no). */
+function autoIdeas() {
+  const n = settings.ideasPerDay;
+  if (!n) return;
+  const day = dayKey(Date.now());
+  const made = settings.ideasMade?.day === day ? settings.ideasMade.count : 0;
+  if (made >= n || Date.now() - (settings.ideasMade?.at ?? 0) < (86400_000 / n) * 0.9) return;
+  let ok = true;
+  try {
+    generateIdeas(1, "both");
+  } catch {
+    ok = false; // the brain has no words yet - try again at the next slot
+  }
+  settings.ideasMade = { day, count: made + (ok ? 1 : 0), at: Date.now() };
+  writeJson("settings.json", settings);
+  if (ok) apLog("Made a new coin idea (Ideas per day)");
 }
 
 /** Optional: when the main wallet (the float) grows past target + extra, the extra goes to your Phantom. */
@@ -1346,8 +1436,9 @@ function saveAutopilot(body) {
   num("retryGapMinutes", 0, 2880); num("maxDays", 1, 30); num("maxLaunchesPerDay", 1, 100); num("windowStart", 0, 24);
   num("windowEnd", 0, 24); num("tzOffset", -900, 900); num("checkMinutes", 1, 120); num("minWallets", 1, 1000);
   num("takeProfitX", 0, 100); num("autoClaimSol", 0, 10); num("floatTarget", 0, 1000); num("sweepAbove", 0.01, 1000);
+  num("dailyGoal", 0, 10000); num("ideasPerDay", 0, 48);
   if (settings.takeProfitX > 0 && settings.takeProfitX <= 1) throw new UserError("Auto-sell must be above 1x (or 0 for off).");
-  for (const k of ["autopilot", "spendLock", "autoSweep"]) if (body[k] !== undefined) settings[k] = !!body[k];
+  for (const k of ["autopilot", "spendLock", "autoSweep", "paused"]) if (body[k] !== undefined) settings[k] = !!body[k];
   if (settings.autoSweep && !settings.withdrawTo) throw new UserError("Save your Phantom address first (Wallet tab), then turn on the profit sweep.");
   writeJson("settings.json", settings);
   apLog(`Settings changed: ${Object.keys(body).filter((k) => k !== "tzOffset").join(", ")}`);
@@ -1383,6 +1474,24 @@ async function brandAction(body) {
       b.plan = null;
       if (b.prep) delete b.prep.siteFailed;
       break;
+    case "launchNow": {
+      // Schedule "Now": start this coin right away, skipping the gap (still obeys the spending lock)
+      if (b.status !== "approved") throw new UserError("Only booked coins can go out now.");
+      if (!b.image || (!b.plan && !b.website)) throw new UserError("Its logo or website is still being made - try again in a minute.");
+      if (settings.spendLock) throw new UserError("The spending lock is on - turn it off in More first.");
+      if (coins.some((c) => c.auto && PRE_LAUNCH.includes(c.stage))) throw new UserError("Another coin is getting ready - wait until it's live.");
+      delete b.notBefore;
+      launchBrand(b);
+      break;
+    }
+    case "setTime": {
+      const at = Number(body.at);
+      if (!Number.isFinite(at) || at < Date.now() - 60_000 || at > Date.now() + 30 * 86400_000) throw new UserError("Pick a time in the next 30 days.");
+      b.notBefore = at;
+      apLog(`${b.name} set to go out at ${new Date(at - settings.tzOffset * 60_000).toISOString().slice(11, 16)}`);
+      break;
+    }
+    case "clearTime": delete b.notBefore; break;
     case "requeue":
       if (!["retired", "runner"].includes(b.status)) throw new UserError("Only retired brands can go back in the queue.");
       Object.assign(b, { status: "approved", tries: [], nextTryAt: 0 }); break;
@@ -1617,11 +1726,65 @@ const failedLogins = new Map(); // ip -> { n, until }
 const sign = (v) => createHmac("sha256", SESSION_KEY).update(v).digest();
 const clientIp = (req) => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
 
+// The cookie carries the session generation: "Log out all devices" bumps it, so every older cookie stops working.
 function loggedIn(req) {
   if (!PUBLIC) return true;
-  const m = /(?:^|;\s*)ap=(\d+)\.([0-9a-f]{64})/.exec(req.headers.cookie || "");
-  if (!m || Number(m[1]) < Date.now()) return false;
-  return timingSafeEqual(sign(m[1]), Buffer.from(m[2], "hex"));
+  const m = /(?:^|;\s*)ap=(\d+)\.(\d+)\.([0-9a-f]{64})/.exec(req.headers.cookie || "");
+  if (!m || Number(m[1]) < Date.now() || Number(m[2]) !== (settings.sessionVer ?? 0)) return false;
+  return timingSafeEqual(sign(`${m[1]}.${m[2]}`), Buffer.from(m[3], "hex"));
+}
+
+// ---------- 6-digit login code (TOTP, works with Google Authenticator / Authy) ----------
+
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const b32encode = (buf) => {
+  let bits = 0, val = 0, out = "";
+  for (const b of buf) {
+    val = (val << 8) | b;
+    bits += 8;
+    while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  return bits ? out + B32[(val << (5 - bits)) & 31] : out;
+};
+const b32decode = (s) => {
+  let bits = 0, val = 0;
+  const out = [];
+  for (const ch of s.replace(/=+$/, "").toUpperCase()) {
+    val = (val << 5) | B32.indexOf(ch);
+    bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return Buffer.from(out);
+};
+function totpAt(secret, counter) {
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const h = createHmac("sha1", b32decode(secret)).update(msg).digest();
+  const o = h[19] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000).padStart(6, "0");
+}
+let totp = readSecret("totp.json", null) ?? { enabled: false };
+/** Accepts the code for now, 30s before or 30s after (phone clocks drift), and never the same code twice. */
+function totpOk(secret, code, remember) {
+  code = String(code ?? "").replace(/\s/g, "");
+  if (!/^\d{6}$/.test(code)) return false;
+  const now = Math.floor(Date.now() / 30_000);
+  for (const ctr of [now - 1, now, now + 1]) {
+    if (totpAt(secret, ctr) !== code) continue;
+    if (remember) {
+      if (ctr <= (totp.lastCtr ?? -1)) return false;
+      totp.lastCtr = ctr;
+      writeSecret("totp.json", totp);
+    }
+    return true;
+  }
+  return false;
+}
+function failLogin(req) {
+  const ip = clientIp(req);
+  const f = failedLogins.get(ip) ?? { n: 0, until: 0 };
+  if (++f.n >= 5) Object.assign(f, { n: 0, until: Date.now() + 15 * 60_000 });
+  failedLogins.set(ip, f);
 }
 
 /** Checks the password with the same 5-tries lockout as the login page. */
@@ -1639,10 +1802,19 @@ async function checkPassword(req, password) {
   failedLogins.delete(ip);
 }
 
-async function login(req, res, password) {
+async function login(req, res, password, code) {
   await checkPassword(req, password);
+  if (totp.enabled) {
+    if (!code) return json(res, 400, { error: "Enter the 6-digit code from your authenticator app.", needCode: true });
+    if (!totpOk(totp.secret, code, true)) {
+      failLogin(req);
+      await sleep(800);
+      return json(res, 400, { error: "That code didn't match - use the newest one in the app.", needCode: true });
+    }
+  }
   const exp = String(Date.now() + SESSION_MS);
-  res.setHeader("Set-Cookie", `ap=${exp}.${sign(exp).toString("hex")}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MS / 1000}`);
+  const v = `${exp}.${settings.sessionVer ?? 0}`;
+  res.setHeader("Set-Cookie", `ap=${v}.${sign(v).toString("hex")}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MS / 1000}`);
   json(res, 200, { ok: true });
 }
 
@@ -1663,9 +1835,10 @@ h1{margin:0 0 18px;font-size:22px}h1 span{color:#d5f26c}
 input{width:100%;box-sizing:border-box;background:#0e1420;color:#e8ecf3;border:1px solid #2a3242;border-radius:10px;padding:12px;font-size:16px}
 button{width:100%;margin-top:12px;background:#d5f26c;color:#11160a;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:15px}
 p{color:#f06b6b;min-height:20px;margin:10px 0 0;font-size:13px}</style></head><body>
-<form id="f"><h1>AUTO<span>PILOT</span></h1><input type="password" id="pw" placeholder="Password" autofocus autocomplete="current-password"><button>Log in</button><p id="e"></p></form>
-<script>document.getElementById("f").onsubmit=async(ev)=>{ev.preventDefault();const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:document.getElementById("pw").value})});
-if(r.ok)location.href="/";else document.getElementById("e").textContent=(await r.json().catch(()=>({}))).error||"Wrong password."}</script></body></html>`;
+<form id="f"><h1>AUTO<span>PILOT</span></h1><input type="password" id="pw" placeholder="Password" autofocus autocomplete="current-password">
+<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="margin-top:10px;display:none;letter-spacing:6px;text-align:center"><button>Log in</button><p id="e"></p></form>
+<script>const $=(i)=>document.getElementById(i);$("f").onsubmit=async(ev)=>{ev.preventDefault();const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("pw").value,code:$("code").value})});
+if(r.ok)return void(location.href="/");const j=await r.json().catch(()=>({}));$("e").textContent=j.error||"Wrong password.";if(j.needCode){$("code").style.display="block";$("code").focus();}}</script></body></html>`;
 
 // ---------- Backup / restore (moving AUTOPILOT between your PC and the online server) ----------
 
@@ -1731,7 +1904,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === "POST" && url.pathname === "/api/login") {
         const body = await new Request(url, { method: "POST", headers: req.headers, body: req, duplex: "half" }).json().catch(() => ({}));
-        return await login(req, res, body.password);
+        return await login(req, res, body.password, body.code);
       }
       if (req.method === "GET" && !url.pathname.startsWith("/api/")) {
         res.writeHead(302, { Location: "/login" });
@@ -1778,7 +1951,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
       return json(res, 200, {
-        simulate: SIMULATE, pinata: !!PINATA_JWT, x: X_READY, customRpc: !!process.env.SOLANA_RPC_URL, site: siteConfig, public: PUBLIC,
+        simulate: SIMULATE, pinata: !!PINATA_JWT, x: X_READY, customRpc: !!process.env.SOLANA_RPC_URL, site: siteConfig, public: PUBLIC, totp: !!totp.enabled,
         main: { address: mainWallet.publicKey.toBase58(), sol: SIMULATE ? 0 : await mainBalance() },
         withdrawTo: settings.withdrawTo, now: Date.now(), coins: coins.map(publicCoin),
         ap: { ...Object.fromEntries(Object.keys(AP_DEFAULTS).map((k) => [k, settings[k]])), status: apStatus, activity: activity.slice(0, 40) },
@@ -1799,6 +1972,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(resultsCsv());
     }
     if (req.method === "GET" && url.pathname === "/api/radar") return json(res, 200, radar());
+    if (req.method === "GET" && url.pathname === "/api/health") return json(res, 200, await health());
 
     if (req.method === "POST") {
       // Only this page may press buttons, so other websites can't drive your launcher.
@@ -1810,9 +1984,40 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === "/api/coins") return json(res, 200, await addCoin(await request.formData()));
       if (url.pathname === "/api/brand-approve") return json(res, 200, await approveBrand(await request.formData()));
       const body = await request.json().catch(() => ({}));
-      if (url.pathname === "/api/logout") {
+      if (url.pathname === "/api/logout" || url.pathname === "/api/logout-all") {
+        if (url.pathname === "/api/logout-all") {
+          settings.sessionVer = (settings.sessionVer ?? 0) + 1; // every cookie from before stops working
+          writeJson("settings.json", settings);
+          apLog("Logged out every device");
+        }
         res.setHeader("Set-Cookie", "ap=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
         return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/api/2fa") {
+        // setup: make a new secret (not on yet) · enable: prove the app shows the right code · disable: password + code
+        if (body.action === "setup") {
+          if (totp.enabled) throw new UserError("The login code is already on.");
+          totp = { enabled: false, pending: b32encode(randomBytes(20)) };
+          writeSecret("totp.json", totp);
+          return json(res, 200, { secret: totp.pending, uri: `otpauth://totp/AUTOPILOT?secret=${totp.pending}&issuer=AUTOPILOT&digits=6&period=30` });
+        }
+        if (body.action === "enable") {
+          if (!totp.pending || !totpOk(totp.pending, body.code, false)) throw new UserError("That code didn't match - check the app and try the newest code.");
+          totp = { enabled: true, secret: totp.pending };
+          writeSecret("totp.json", totp);
+          apLog("6-digit login code turned on");
+          return json(res, 200, { ok: true });
+        }
+        if (body.action === "disable") {
+          if (!totp.enabled) return json(res, 200, { ok: true });
+          if (PUBLIC) await checkPassword(req, body.password);
+          if (!totpOk(totp.secret, body.code, true)) throw new UserError("That code didn't match.");
+          totp = { enabled: false };
+          writeSecret("totp.json", totp);
+          apLog("6-digit login code turned off");
+          return json(res, 200, { ok: true });
+        }
+        throw new UserError("Unknown action.");
       }
       if (url.pathname === "/api/export-main") {
         if (PUBLIC) await checkPassword(req, body.password); // asked again even when logged in
@@ -1866,9 +2071,28 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === "/api/withdraw-main") {
         if (SIMULATE) throw new UserError("Practice mode - nothing real to withdraw.");
         if (!settings.withdrawTo) throw new UserError("Save your Phantom address first.");
-        const sent = await transferAll(mainWallet, settings.withdrawTo);
+        let sent;
+        if (body.amount !== undefined && body.amount !== "") {
+          const amount = Number(body.amount);
+          const bal = (await balanceOf(mainWallet.publicKey)) / SOL;
+          if (!(amount > 0)) throw new UserError("Type how much SOL to send.");
+          if (amount > bal - 0.0002) throw new UserError(`Only ${Math.max(0, bal - 0.0002).toFixed(4)} SOL can go now.`);
+          await sendIxs([mainWallet], [SystemProgram.transfer({ fromPubkey: mainWallet.publicKey, toPubkey: new PublicKey(settings.withdrawTo), lamports: Math.floor(amount * SOL) })], 1000);
+          sent = amount;
+        } else {
+          sent = await transferAll(mainWallet, settings.withdrawTo);
+        }
         mainBalCache.at = 0;
+        apLog(`Withdrew ${sent.toFixed(4)} SOL to your wallet`);
         return json(res, 200, { sent });
+      }
+      if (url.pathname === "/api/tidy" || url.pathname === "/api/emergency") {
+        if (url.pathname === "/api/emergency") {
+          Object.assign(settings, { autopilot: false, paused: true, spendLock: true });
+          writeJson("settings.json", settings);
+          apLog("EMERGENCY STOP: autopilot off, paused, spending locked - collecting SOL");
+        }
+        return json(res, 200, await tidyUp());
       }
     }
     json(res, 404, { error: "Not found" });
