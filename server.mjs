@@ -25,7 +25,7 @@ import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs
 import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
 import { createBrain } from "./brain.mjs";
 import { checkClash, checkName, makeIdeas } from "./ideas.mjs";
-import { aiError, aiReady } from "./ai.mjs";
+import { aiError, aiReady, aiVia } from "./ai.mjs";
 import { makeArt } from "./art.mjs";
 import { planSite, renderSite, templatePlan } from "./sites.mjs";
 import { createX, xAppReady } from "./xauth.mjs";
@@ -1359,7 +1359,7 @@ async function health() {
   const bal = SIMULATE ? 0 : await mainBalance();
   const data = {
     services: [
-      { name: "Claude (ideas, logos, sites)", ok: aiReady(), note: aiReady() ? "connected" : "add the Claude key (Keys tab)" },
+      { name: "Claude (ideas, logos, sites)", ok: aiReady(), note: aiVia() === "subscription" ? "connected · your subscription" : aiVia() === "api" ? "connected · API key" : "add the Claude token (Keys tab)" },
       { name: "X app (posting)", ok: xAppReady(), note: xAppReady() ? `${xa.list().length} account${xa.list().length === 1 ? "" : "s"} connected` : "add the X app keys (Keys tab)" },
       { name: "Brain feed (PumpPortal)", ok: brain.summary().status.connected, note: brain.summary().status.trades ? "live + trade data" : brain.summary().status.connected ? "live · add the PumpPortal key for trade data" : "reconnecting" },
       { name: "Pinata (coin details)", ok: pinT.ok, note: pinT.ok ? "working" : pinT.error },

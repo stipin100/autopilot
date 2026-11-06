@@ -8,7 +8,9 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 import { fileURLToPath } from "node:url";
 
 export const KEY_FIELDS = [
-  { k: "ANTHROPIC_API_KEY", label: "Claude", what: "writes coin ideas, logos and websites", where: "console.anthropic.com → API Keys → Create key", test: /^sk-ant-\S{20,}$/ },
+  { k: "CLAUDE_CODE_OAUTH_TOKEN", label: "Claude (your subscription)", what: "writes coin ideas, logos and websites - free on your Claude plan", where: "on your computer run  claude setup-token  and paste the token it prints", test: /^sk-ant-oat\S{20,}$/ },
+  { k: "ANTHROPIC_API_KEY", label: "Claude API key (optional, paid)", what: "only if you'd rather pay per use - used instead of the subscription token", where: "console.anthropic.com → API Keys (needs credits)", test: /^sk-ant-\S{20,}$/ },
+  { k: "SITE_DOMAIN", label: "Coin website domain", what: "every coin's site lives at <coin>.this-domain", where: "a domain you own, e.g. agenthelp.fun", test: /^(?!https?:)[a-z0-9-]+(\.[a-z0-9-]+)+$/ },
   { k: "X_CLIENT_ID", label: "X app - Client ID", what: "lets AUTOPILOT post on X", where: "developer.x.com → your app → Keys and tokens → OAuth 2.0 Client ID", test: /^\S{10,}$/ },
   { k: "X_CLIENT_SECRET", label: "X app - Client Secret", what: "goes with the Client ID", where: "same page → OAuth 2.0 Client Secret", test: /^\S{10,}$/ },
   { k: "PUMPPORTAL_API_KEY", label: "PumpPortal", what: "live trade data for the Brain's hot words + bot radar", where: "pumpportal.fun → Create API key (fund it with ~0.02 SOL)", test: /^\S{20,}$/ },
