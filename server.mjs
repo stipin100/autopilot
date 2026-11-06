@@ -1295,8 +1295,9 @@ function serveSite(req, res, url) {
     fs.createReadStream(path.join(IMAGES, f)).pipe(res);
     return true;
   }
+  const html = sitePage(b); // build it first, so a page that fails to draw can still get a proper error answer
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "max-age=30" });
-  res.end(sitePage(b));
+  res.end(html);
   return true;
 }
 
@@ -2152,8 +2153,9 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: "Not found" });
   } catch (e) {
-    if (e instanceof UserError || /Invalid public key|Non-base58/i.test(e.message)) return json(res, 400, { error: e instanceof UserError ? e.message : "That address isn't a valid Solana address." });
     console.error(e);
+    if (res.headersSent) return void res.end(); // never let one broken answer crash the whole server
+    if (e instanceof UserError || /Invalid public key|Non-base58/i.test(e.message)) return json(res, 400, { error: e instanceof UserError ? e.message : "That address isn't a valid Solana address." });
     json(res, 500, { error: `Something went wrong: ${e.message}` });
   }
 });
