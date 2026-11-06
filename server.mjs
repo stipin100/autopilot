@@ -1920,6 +1920,8 @@ const server = http.createServer(async (req, res) => {
     }
     // Coin websites are public
     if (serveSite(req, res, url)) return;
+    // Claude connector (MCP): its own secret key in the address instead of the password
+    if (url.pathname.startsWith("/mcp/")) return await mcpRoute(req, res, url);
     // X sends you back here after logging in (no AUTOPILOT cookie arrives on that hop; the one-time state proves it's yours)
     if (req.method === "GET" && url.pathname === "/api/x/callback") {
       let msg;
@@ -2011,7 +2013,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/radar") return json(res, 200, radar());
     if (req.method === "GET" && url.pathname === "/api/health") return json(res, 200, await health());
-    if (req.method === "GET" && url.pathname === "/api/keys") return json(res, 200, { keys: keyStatus(), canRestart: PUBLIC });
+    if (req.method === "GET" && url.pathname === "/api/keys") return json(res, 200, { keys: keyStatus(), canRestart: PUBLIC, connector: mcpUrl() });
 
     if (req.method === "POST") {
       // Only this page may press buttons, so other websites can't drive your launcher.
@@ -2125,6 +2127,13 @@ const server = http.createServer(async (req, res) => {
         apLog(`Withdrew ${sent.toFixed(4)} SOL to your wallet`);
         return json(res, 200, { sent });
       }
+      if (url.pathname === "/api/connector-key") {
+        // a new connector key: the old address stops working right away
+        mcpKey = randomBytes(24).toString("hex");
+        writeSecret("mcp.json", { key: mcpKey });
+        apLog("Claude connector got a new key - the old address no longer works");
+        return json(res, 200, { connector: mcpUrl() });
+      }
       if (url.pathname === "/api/keys") {
         // keys are read once at startup, so AUTOPILOT restarts itself to use new ones (~30s online)
         if (coins.some((c) => c.busy)) throw new UserError("A launch step is running right now - try again in a minute.");
@@ -2159,6 +2168,189 @@ const server = http.createServer(async (req, res) => {
     json(res, 500, { error: `Something went wrong: ${e.message}` });
   }
 });
+
+// ---------- Claude connector (MCP) ----------
+// Lets Claude add coins, make ideas, read results and move the schedule from any chat - without the password.
+// On purpose it can NOT: withdraw, export keys, change the dev buy, turn on the autopilot or turn off the spending lock.
+// Address: <AUTOPILOT>/mcp/<key>. The key lives locked in mcp.json; "New key" in Accounts → Keys turns the old one off.
+
+let mcpKey = readSecret("mcp.json", null)?.key;
+if (!mcpKey) { mcpKey = randomBytes(24).toString("hex"); writeSecret("mcp.json", { key: mcpKey }); }
+const mcpUrl = () => `${baseUrl()}/mcp/${mcpKey}`;
+
+/** "21:30" in your time (the browser's time zone saved in settings) -> the next time it's 21:30, as a timestamp. */
+function nextLocalTime(hhmm) {
+  const m = /^(\d{1,2})[:.](\d{2})$/.exec(String(hhmm ?? "").trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) throw new UserError('Give the time like "21:30".');
+  const off = settings.tzOffset * 60_000, nowLocal = Date.now() - off;
+  const day = new Date(nowLocal); day.setUTCHours(Number(m[1]), Number(m[2]), 0, 0);
+  let at = day.getTime() + off;
+  if (at < Date.now()) at += 86400_000;
+  return at;
+}
+
+const brandInfo = (b) => {
+  const last = b.tries.map((t) => coins.find((c) => c.id === t.coinId)).filter(Boolean).at(-1);
+  return {
+    id: b.id, name: b.name, symbol: b.symbol, status: b.status, ready: !!(b.image && (b.plan || b.website)),
+    logo: b.image ? `${baseUrl()}/img/${b.image}` : null, website: b.plan ? siteUrl(b) : b.website || null, whatIf: b.whatIf || null,
+    setTime: b.notBefore ? new Date(b.notBefore + settings.leadMinutes * 60_000).toISOString() : null, tries: b.tries.length,
+    lastTry: last ? { stage: last.stage, ca: last.mint, outsideWallets: last.stats?.outsideWallets, profitSol: last.stats?.profit } : null,
+  };
+};
+
+const MCP_TOOLS = [
+  {
+    name: "autopilot_status", description: "What AUTOPILOT is doing now: switches, status line, spending wallet SOL, today's results, coins live and the next coins booked.",
+    inputSchema: { type: "object", properties: {} },
+    run: async () => {
+      const r = results(), today = r.days.at(-1);
+      return {
+        mode: SIMULATE ? "practice" : "live", autopilot: settings.autopilot, paused: settings.paused, spendingLock: settings.spendLock, status: apStatus,
+        spendingWalletSol: SIMULATE ? null : +(await mainBalance()).toFixed(4), devBuySol: settings.devBuySol, minutesBetweenLaunches: settings.minGapMinutes,
+        launchHours: `${settings.windowStart}:00-${settings.windowEnd}:00 (owner's time)`,
+        today: { profitSol: today?.profit ?? 0, launches: today?.launches ?? 0, feesSol: today?.fees ?? 0 }, allTime: r.total,
+        live: coins.filter((c) => ["post", "checks", "earning"].includes(c.stage)).map((c) => ({ name: c.name, symbol: c.symbol, stage: c.stage, ca: c.mint, outsideWallets: c.stats.outsideWallets, profitSol: c.stats.profit })),
+        booked: brands.filter((b) => b.status === "approved").sort((a, b) => a.order - b.order).map((b) => `${b.name} $${b.symbol}${b.image && (b.plan || b.website) ? "" : " (pictures/site still being made)"}`),
+      };
+    },
+  },
+  {
+    name: "list_coins", description: "List coins (brands). status: idea | approved | live | runner | retired | rejected | all (default all except rejected).",
+    inputSchema: { type: "object", properties: { status: { type: "string" } } },
+    run: ({ status = "" }) => brands.filter((b) => (!status || status === "all" ? b.status !== "rejected" || status === "all" : b.status === status)).map(brandInfo),
+  },
+  {
+    name: "add_coins", description: "Add one or more coins. approve=true (default) books them right away; AUTOPILOT then makes the logo, banner and website by itself. Ticker: 1-10 letters/numbers. whatIf: a 'What if...?' hook line for the X launch post.",
+    inputSchema: {
+      type: "object", required: ["coins"],
+      properties: {
+        coins: { type: "array", maxItems: 20, items: { type: "object", required: ["name", "symbol"], properties: { name: { type: "string" }, symbol: { type: "string" }, description: { type: "string" }, tagline: { type: "string" }, whatIf: { type: "string" } } } },
+        approve: { type: "boolean" },
+      },
+    },
+    run: ({ coins: list = [], approve = true }) => list.map((it) => {
+      const name = String(it.name ?? "").trim().replace(/\s+/g, " "), symbol = String(it.symbol ?? "").trim().toUpperCase().replace(/^\$/, "");
+      if (!name || name.length > 32) return { name, error: "name must be 1-32 characters" };
+      if (!/^[A-Z0-9]{1,10}$/.test(symbol)) return { name, error: "ticker must be 1-10 letters or numbers" };
+      if (brands.some((b) => b.symbol === symbol && !["rejected", "retired"].includes(b.status))) return { name, symbol, error: "a coin with this ticker is already there" };
+      const b = newBrand({
+        name, symbol, description: String(it.description ?? "").slice(0, 1000), tagline: String(it.tagline ?? "").slice(0, 80), whatIf: String(it.whatIf ?? "").slice(0, 140),
+        word: "", why: "added by Claude", xPost: `${name} $${symbol} is live\n\nCA: {CA}`, xAccountId: "auto", check: checkName({ name, symbol }, ideaContext()),
+      }, "you");
+      if (approve) {
+        Object.assign(b, { status: "approved", approvedAt: Date.now(), order: Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1)) });
+        slugOf(b);
+      }
+      apLog(`Claude added ${name} $${symbol}${approve ? " (booked)" : " (idea)"}`);
+      save();
+      return { id: b.id, name, symbol, status: b.status, website: approve ? siteUrl(b) : null };
+    }),
+  },
+  {
+    name: "approve_coin", description: "Book an idea (status idea -> approved). AUTOPILOT then makes its logo, banner and website.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    run: ({ id }) => {
+      const b = brands.find((x) => x.id === id);
+      if (!b) throw new UserError("No coin with that id - use list_coins.");
+      if (!["idea", "rejected"].includes(b.status)) throw new UserError(`It's already ${b.status}.`);
+      Object.assign(b, { status: "approved", approvedAt: Date.now(), order: Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1)) });
+      slugOf(b);
+      apLog(`Claude approved ${b.name} $${b.symbol}`);
+      save();
+      return brandInfo(b);
+    },
+  },
+  {
+    name: "reject_coin", description: "Reject an idea, or retire a booked coin so it won't launch.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    run: async ({ id }) => {
+      const b = brands.find((x) => x.id === id);
+      if (!b) throw new UserError("No coin with that id - use list_coins.");
+      await brandAction({ id, action: b.status === "idea" ? "reject" : "retire" });
+      return brandInfo(b);
+    },
+  },
+  {
+    name: "make_ideas", description: "Have the brain make new coin ideas from the words selling on Pump.fun right now (they wait as ideas for approval).",
+    inputSchema: { type: "object", properties: { count: { type: "number" } } },
+    run: ({ count = 5 }) => ({ made: generateIdeas(Math.min(20, Math.max(1, Number(count) || 5)), "both"), ideas: brands.filter((b) => b.status === "idea").slice(0, 20).map(brandInfo) }),
+  },
+  {
+    name: "set_coin_time", description: 'Give a booked coin its own go-live time, like "22:30" in the owner\'s time (the next time it\'s 22:30). time "" clears it.',
+    inputSchema: { type: "object", required: ["id", "time"], properties: { id: { type: "string" }, time: { type: "string" } } },
+    run: async ({ id, time }) => {
+      if (!String(time ?? "").trim()) await brandAction({ id, action: "clearTime" });
+      else await brandAction({ id, action: "setTime", at: nextLocalTime(time) - settings.leadMinutes * 60_000 });
+      return brandInfo(brands.find((x) => x.id === id));
+    },
+  },
+  {
+    name: "launch_now", description: "Send a booked, ready coin out right away (skips the gap). Refused while the spending lock is on.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    run: async ({ id }) => { await brandAction({ id, action: "launchNow" }); return brandInfo(brands.find((x) => x.id === id)); },
+  },
+  {
+    name: "update_schedule", description: "Change schedule rules. Allowed: minGapMinutes, windowStart, windowEnd (owner's hours 0-24), triesPerDay, retryGapMinutes, maxDays, maxLaunchesPerDay, checkMinutes, minWallets, takeProfitX, paused. (Dev buy, autopilot and spending lock stay with the owner.)",
+    inputSchema: { type: "object", properties: Object.fromEntries(["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX"].map((k) => [k, { type: "number" }]).concat([["paused", { type: "boolean" }]])) },
+    run: (args) => {
+      const allowed = ["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX", "paused"];
+      const body = Object.fromEntries(Object.entries(args ?? {}).filter(([k]) => allowed.includes(k)));
+      if (!Object.keys(body).length) throw new UserError(`Nothing to change - allowed: ${allowed.join(", ")}`);
+      saveAutopilot(body);
+      return Object.fromEntries(allowed.map((k) => [k, settings[k]]));
+    },
+  },
+  {
+    name: "recent_results", description: "The latest launches and what each made (after costs).",
+    inputSchema: { type: "object", properties: { limit: { type: "number" } } },
+    run: ({ limit = 10 }) => resultRows().slice(0, Math.min(50, Math.max(1, Number(limit) || 10))),
+  },
+];
+
+async function mcpCall(msg) {
+  const { id, method, params } = msg ?? {};
+  const ok = (result) => ({ jsonrpc: "2.0", id, result });
+  if (method === "initialize") {
+    return ok({
+      protocolVersion: params?.protocolVersion || "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "autopilot", version: "1.0.0" },
+      instructions: "AUTOPILOT is the owner's Pump.fun launcher. Use add_coins to book coins (it makes logos, banners and sites itself), autopilot_status / recent_results to report, set_coin_time and update_schedule for timing. Money moves (withdraw, keys, dev buy, autopilot on, spending lock) are only in the owner's dashboard.",
+    });
+  }
+  if (method === "ping") return ok({});
+  if (method === "tools/list") return ok({ tools: MCP_TOOLS.map(({ run, ...t }) => t) });
+  if (method === "tools/call") {
+    const tool = MCP_TOOLS.find((t) => t.name === params?.name);
+    if (!tool) return { jsonrpc: "2.0", id, error: { code: -32602, message: `Unknown tool ${params?.name}` } };
+    try {
+      const out = await tool.run(params?.arguments ?? {});
+      return ok({ content: [{ type: "text", text: JSON.stringify(out, null, 1) }] });
+    } catch (e) {
+      return ok({ content: [{ type: "text", text: e.message }], isError: true });
+    }
+  }
+  return { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } };
+}
+
+async function mcpRoute(req, res, url) {
+  const key = url.pathname.slice(5).replace(/\/+$/, "");
+  if ((failedLogins.get(clientIp(req))?.until ?? 0) > Date.now()) return json(res, 429, { error: "Too many wrong tries - wait 15 minutes." });
+  const good = Buffer.from(mcpKey), given = Buffer.from(key);
+  if (given.length !== good.length || !timingSafeEqual(given, good)) {
+    failLogin(req);
+    await sleep(500);
+    return json(res, 404, { error: "Not found" });
+  }
+  if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }); return res.end(); }
+  if (restoring) return json(res, 503, { error: "Restarting" });
+  const body = await new Request(url, { method: "POST", headers: req.headers, body: req, duplex: "half" }).json().catch(() => null);
+  if (!body) return json(res, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
+  const msgs = Array.isArray(body) ? body : [body];
+  const out = [];
+  for (const m of msgs) if (m.id !== undefined) out.push(await mcpCall(m)); // notifications (no id) get no answer
+  if (!out.length) { res.writeHead(202); return res.end(); }
+  return json(res, 200, Array.isArray(body) ? out : out[0]);
+}
 
 /**
  * seed-ideas.json (in the code): coins to add without logging in. Each ticker is added once, already approved,

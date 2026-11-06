@@ -503,6 +503,16 @@
     <section class="page" id="p-accounts">
       <div class="subtabs" id="accTabs"><button class="on" data-at="x">X accounts</button><button data-at="keys">🔑 Keys</button><button data-at="conn">Connections</button></div>
       <div id="accKeys" hidden>
+        <div class="card">
+          <h2>🤖 Claude connector</h2>
+          <p class="hint">Add this address in Claude once, and Claude can add coins, make ideas, read results and move the schedule for you from any chat. It can't withdraw, export keys, change the dev buy, turn on the autopilot or turn off the spending lock. Keep the address secret - anyone with it can add coins.</p>
+          <div class="row" style="flex-wrap:nowrap"><input id="connUrl" type="password" readonly style="flex:1;width:auto;font-family:var(--mono)"><button type="button" class="btn sm" id="connShow">Show</button><button type="button" class="btn sm lime" id="connCopy">Copy</button></div>
+          <details style="margin-top:12px"><summary>How to add it in Claude (one time)</summary><ol class="small muted" style="line-height:1.9">
+            <li><b>Claude app / claude.ai:</b> Settings → <b>Connectors</b> → <b>Add custom connector</b> → name it <b>AUTOPILOT</b> → paste the address → Add.</li>
+            <li><b>Claude Code (on your PC):</b> run <code class="mono">claude mcp add --transport http autopilot &lt;address&gt;</code></li>
+            <li>Then just ask in a chat: <i>"add these 5 coins to AUTOPILOT"</i> or <i>"what launched today?"</i></li></ol></details>
+          <div class="row" style="margin-top:10px"><button type="button" class="btn sm red" id="connNew">New key (old address stops working)</button></div>
+        </div>
         <form class="card" id="keysForm" autocomplete="off">
           <h2>Keys</h2>
           <p class="hint">Paste a key and press <b>Save keys</b>. They're stored locked with your password, and only the last 4 characters are ever shown again. AUTOPILOT restarts by itself to use them (about 30 seconds).</p>
@@ -1501,7 +1511,13 @@ $("#withdrawMain").onclick = async () => {
 // ================= v2 pages: Today · Coins · Schedule · Accounts · Wallets · More =================
 const PRE = ["fund", "pair", "upload", "launch"];
 let ccFilter = "ready", accTab = "x", healthData = null, totpSetup = null, keysData = null;
-async function loadKeys() { keysData = await get("/api/keys"); if (page === "accounts") render(); }
+async function loadKeys() { keysData = await get("/api/keys"); if (keysData?.connector) $("#connUrl").value = keysData.connector; if (page === "accounts") render(); }
+$("#connShow").onclick = () => { const i = $("#connUrl"); i.type = i.type === "password" ? "text" : "password"; $("#connShow").textContent = i.type === "password" ? "Show" : "Hide"; };
+$("#connCopy").onclick = () => copy($("#connUrl").value, "Connector address");
+$("#connNew").onclick = async () => {
+  if (!confirm("Make a new connector key? The old address stops working, so you'll need to add the new one in Claude again.")) return;
+  try { const r = await post("/api/connector-key", {}); $("#connUrl").value = r.connector; toast("New connector address made - add it in Claude again"); } catch (err) { toast(err.message); }
+};
 /** After saving keys AUTOPILOT restarts: wait until it answers again, then reload. */
 async function waitForRestart() {
   $("#keysNote").textContent = "Restarting with the new keys…";
