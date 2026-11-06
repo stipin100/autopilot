@@ -501,10 +501,19 @@
 
     <!-- ================= ACCOUNTS ================= -->
     <section class="page" id="p-accounts">
-      <div class="subtabs" id="accTabs"><button class="on" data-at="x">X accounts</button><button data-at="conn">Connections</button></div>
+      <div class="subtabs" id="accTabs"><button class="on" data-at="x">X accounts</button><button data-at="keys">🔑 Keys</button><button data-at="conn">Connections</button></div>
+      <div id="accKeys" hidden>
+        <form class="card" id="keysForm" autocomplete="off">
+          <h2>Keys</h2>
+          <p class="hint">Paste a key and press <b>Save keys</b>. They're stored locked with your password, and only the last 4 characters are ever shown again. AUTOPILOT restarts by itself to use them (about 30 seconds).</p>
+          <div id="keyRows"></div>
+          <div class="err" id="keysErr"></div>
+          <div class="row"><button class="btn lime glow">Save keys</button><span class="muted small" id="keysNote"></span></div>
+        </form>
+      </div>
       <div id="accX"><div class="card"><h2>X accounts</h2><p class="hint">Each coin posts its launch post and CA reply from one of these.</p><div id="xCard2"></div></div></div>
       <div id="accConn" hidden>
-        <div class="card"><h2>Connections</h2><p class="hint">The services AUTOPILOT uses. Red = a key is missing; add it on Render → Environment Groups → autopilot.</p><div class="hgrid" id="hServices"></div></div>
+        <div class="card"><h2>Connections</h2><p class="hint">The services AUTOPILOT uses. Red = a key is missing - paste it in the 🔑 Keys tab.</p><div class="hgrid" id="hServices"></div></div>
         <div class="card"><h2>System health</h2><p class="hint">Checked every 30 seconds while this page is open.</p><div class="hgrid" id="hSystem"></div></div>
       </div>
     </section>
@@ -1490,7 +1499,29 @@ $("#withdrawMain").onclick = async () => {
 <script>
 // ================= v2 pages: Today · Coins · Schedule · Accounts · Wallets · More =================
 const PRE = ["fund", "pair", "upload", "launch"];
-let ccFilter = "ready", accTab = "x", healthData = null, totpSetup = null;
+let ccFilter = "ready", accTab = "x", healthData = null, totpSetup = null, keysData = null;
+async function loadKeys() { keysData = await get("/api/keys"); if (page === "accounts") render(); }
+/** After saving keys AUTOPILOT restarts: wait until it answers again, then reload. */
+async function waitForRestart() {
+  $("#keysNote").textContent = "Restarting with the new keys…";
+  await new Promise((r) => setTimeout(r, 4000));
+  for (let i = 0; i < 60; i++) {
+    try { const r = await fetch("/api/keys", { cache: "no-store" }); if (r.ok || r.status === 401) return location.reload(); } catch {}
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  $("#keysNote").textContent = "Still restarting - reload the page in a minute.";
+}
+async function sendKeys(values) {
+  $("#keysErr").textContent = "";
+  try {
+    const r = await post("/api/keys", { values });
+    if (!r.changed.length) return toast("Nothing changed");
+    toast(`Saved: ${r.changed.join(", ")}`);
+    if (r.restarting) return waitForRestart();
+    $("#keysNote").textContent = "Saved - restart AUTOPILOT to use them.";
+    loadKeys();
+  } catch (err) { $("#keysErr").textContent = err.message; }
+}
 BCONFIRM.launchNow = "Send this coin out right now? It skips the gap and spends the dev buy.";
 BCONFIRM.requeue = null;
 
@@ -1715,6 +1746,16 @@ function renderAccounts() {
   $$("#accTabs button").forEach((x) => x.classList.toggle("on", x.dataset.at === accTab));
   $("#accX").hidden = accTab !== "x";
   $("#accConn").hidden = accTab !== "conn";
+  $("#accKeys").hidden = accTab !== "keys";
+  if (keysData && !document.activeElement?.closest?.("#keyRows")) {
+    $("#keyRows").html = keysData.keys.map((k) => `<div class="srow" style="align-items:flex-start;flex-wrap:wrap">
+      <div class="l" style="min-width:220px">${esc(k.label)} <span>${esc(k.what)}<br><span class="dim">${esc(k.where)}</span></span></div>
+      <div style="flex:1;min-width:240px">
+        <div class="row" style="margin-bottom:6px">${k.set ? `<span class="chip safe">✓ set ····${esc(k.tail)}</span><span class="muted small">${k.source === "app" ? "saved here" : "from Render"}</span>` : `<span class="chip red">✗ not set</span>`}
+          ${k.source === "app" ? `<button type="button" class="btn sm ghost" data-keyremove="${k.k}">Remove</button>` : ""}</div>
+        <input type="password" name="${k.k}" placeholder="${k.set ? "paste a new one to replace it" : "paste it here"}" autocomplete="new-password" spellcheck="false">
+      </div></div>`).join("");
+  }
   renderSettings(); // builds the X accounts card on the old settings page; show the same here
   $("#xCard2").html = $("#xCard").innerHTML;
   const cell = (s) => `<div class="${s.ok ? "" : s.warn ? "wn" : "bad"}"><b>${esc(s.name)}</b><span>${esc(s.note ?? "")}</span></div>`;
@@ -1800,7 +1841,12 @@ document.addEventListener("click", async (e) => {
   const cf = t.closest("[data-cf]");
   if (cf) { ccFilter = cf.dataset.cf; return render(); }
   const at = t.closest("[data-at]");
-  if (at) { accTab = at.dataset.at; if (accTab === "conn") loadHealth(); return render(); }
+  if (at) { accTab = at.dataset.at; if (accTab === "conn") loadHealth(); if (accTab === "keys") loadKeys(); return render(); }
+  const kr = t.closest("[data-keyremove]");
+  if (kr) {
+    if (!confirm("Remove this saved key? (If the same key is set on Render, that one is used again.)")) return;
+    return sendKeys({ [kr.dataset.keyremove]: "" });
+  }
   const gap = t.closest("[data-gap]");
   if (gap) return setAp({ minGapMinutes: Number(gap.dataset.gap) }, `${gap.textContent} between coins`);
   const tog = t.closest("[data-tog]");
@@ -1882,6 +1928,14 @@ document.addEventListener("click", async (e) => {
   if (t.closest("#logoutMe")) { await post("/api/logout", {}).catch(() => {}); return void (location.href = "/login"); }
 });
 $("#wTo").addEventListener("input", () => ($("#wTo").dataset.touched = "1"));
+$("#keysForm").onsubmit = (e) => {
+  e.preventDefault();
+  const values = {};
+  for (const el of e.target.elements) if (el.name && el.value.trim()) values[el.name] = el.value.trim();
+  if (!Object.keys(values).length) return toast("Paste at least one key first");
+  sendKeys(values);
+  for (const el of e.target.elements) if (el.name) el.value = ""; // don't leave keys sitting on screen
+};
 $("#newCoinForm").onsubmit = async (e) => {
   e.preventDefault();
   $("#ncErr").textContent = "";

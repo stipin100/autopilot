@@ -5,6 +5,7 @@
 //
 // Keys are created and kept ONLY in the data folder on this computer. Back that folder up.
 
+import { keyStatus, saveKeys } from "./keys.mjs"; // first: keys saved in the app go into process.env before anything reads them
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -1358,9 +1359,9 @@ async function health() {
   const bal = SIMULATE ? 0 : await mainBalance();
   const data = {
     services: [
-      { name: "Claude (ideas, logos, sites)", ok: aiReady(), note: aiReady() ? "connected" : "add ANTHROPIC_API_KEY" },
-      { name: "X app (posting)", ok: xAppReady(), note: xAppReady() ? `${xa.list().length} account${xa.list().length === 1 ? "" : "s"} connected` : "add X_CLIENT_ID + X_CLIENT_SECRET" },
-      { name: "Brain feed (PumpPortal)", ok: brain.summary().status.connected, note: brain.summary().status.trades ? "live + trade data" : brain.summary().status.connected ? "live · add PUMPPORTAL_API_KEY for trade data" : "reconnecting" },
+      { name: "Claude (ideas, logos, sites)", ok: aiReady(), note: aiReady() ? "connected" : "add the Claude key (Keys tab)" },
+      { name: "X app (posting)", ok: xAppReady(), note: xAppReady() ? `${xa.list().length} account${xa.list().length === 1 ? "" : "s"} connected` : "add the X app keys (Keys tab)" },
+      { name: "Brain feed (PumpPortal)", ok: brain.summary().status.connected, note: brain.summary().status.trades ? "live + trade data" : brain.summary().status.connected ? "live · add the PumpPortal key for trade data" : "reconnecting" },
       { name: "Pinata (coin details)", ok: pinT.ok, note: pinT.ok ? "working" : pinT.error },
       { name: "Coin websites", ok: true, note: SITE_DOMAIN ? `<coin>.${SITE_DOMAIN}` : `${baseUrl()}/s/<coin>` },
       { name: "Own Solana RPC", ok: !!process.env.SOLANA_RPC_URL, note: process.env.SOLANA_RPC_URL ? "set" : "using the free public one" },
@@ -1973,6 +1974,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/radar") return json(res, 200, radar());
     if (req.method === "GET" && url.pathname === "/api/health") return json(res, 200, await health());
+    if (req.method === "GET" && url.pathname === "/api/keys") return json(res, 200, { keys: keyStatus(), canRestart: PUBLIC });
 
     if (req.method === "POST") {
       // Only this page may press buttons, so other websites can't drive your launcher.
@@ -2085,6 +2087,23 @@ const server = http.createServer(async (req, res) => {
         mainBalCache.at = 0;
         apLog(`Withdrew ${sent.toFixed(4)} SOL to your wallet`);
         return json(res, 200, { sent });
+      }
+      if (url.pathname === "/api/keys") {
+        // keys are read once at startup, so AUTOPILOT restarts itself to use new ones (~30s online)
+        if (coins.some((c) => c.busy)) throw new UserError("A launch step is running right now - try again in a minute.");
+        let changed;
+        try { changed = saveKeys(body.values); } catch (e) { throw new UserError(e.message); }
+        if (!changed.length) return json(res, 200, { changed, restarting: false });
+        apLog(`Keys updated: ${changed.join(", ")}`);
+        save();
+        if (PUBLIC) {
+          restoring = true; // stop launching + saving while it restarts
+          setTimeout(() => {
+            writeJson("coins.json", coins); writeJson("brands.json", brands); writeJson("activity.json", activity); writeSecret("keys.json", keys);
+            process.exit(0); // Render starts it again with the new keys
+          }, 1000);
+        }
+        return json(res, 200, { changed, restarting: PUBLIC });
       }
       if (url.pathname === "/api/tidy" || url.pathname === "/api/emergency") {
         if (url.pathname === "/api/emergency") {
