@@ -25,7 +25,7 @@ import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs
 import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
 import { createBrain } from "./brain.mjs";
 import { checkClash, checkName, makeIdeas } from "./ideas.mjs";
-import { aiError, aiReady, aiVia } from "./ai.mjs";
+import { aiError, aiReady, aiVia, claudeCodeInstalled } from "./ai.mjs";
 import { makeArt } from "./art.mjs";
 import { planSite, renderSite, templatePlan } from "./sites.mjs";
 import { createX, xAppReady } from "./xauth.mjs";
@@ -2126,7 +2126,7 @@ brain.start(); // market study runs all the time (read-only)
 if (PUBLIC) {
   server.listen(PORT, "0.0.0.0", () => {
     chainData().catch(() => {});
-    console.log(`AUTOPILOT online on port ${PORT} - ${SIMULATE ? "PRACTICE" : "LIVE"} mode, password login on`);
+    console.log(`AUTOPILOT online on port ${PORT} - ${SIMULATE ? "PRACTICE" : "LIVE"} mode, password login on · Claude Code ${claudeCodeInstalled() ? "installed" : "MISSING"} · Claude via ${aiVia() || "none (built-in designs)"} · coin sites on ${SITE_DOMAIN || "/s/<coin>"}`);
   });
 } else {
   http.createServer(server.listeners("request")[0]).on("error", () => {}).listen(PORT, "::1");

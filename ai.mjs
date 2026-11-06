@@ -52,6 +52,11 @@ function claudeBin() {
   return found;
 }
 
+/** For the startup log + health page: is Claude Code ready to use a subscription token? */
+export function claudeCodeInstalled() {
+  try { return !!claudeBin(); } catch { return false; }
+}
+
 // Its own empty config folder: no settings, plugins, MCP servers or memory from anywhere else.
 const CONFIG_DIR = path.join(os.tmpdir(), "autopilot-claude");
 
