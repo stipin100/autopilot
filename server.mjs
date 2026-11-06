@@ -198,6 +198,8 @@ async function readCurves(mints) {
 for (const c of coins) {
   // a website build that was running when AUTOPILOT closed never finished
   if (c.site?.status === "building") c.site = { status: "failed", error: "AUTOPILOT was closed while building - press Rebuild website" };
+  // "busy" is saved with the coin: after a restart mid-step it would stay set and the coin would be skipped forever
+  if (c.busy) { console.log(`[${c.symbol}] was mid-step when AUTOPILOT restarted - picking it up again`); c.busy = false; }
 }
 
 let saveTimer = null;
