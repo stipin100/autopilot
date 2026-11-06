@@ -921,6 +921,21 @@ async function step(c) {
         await refreshMoney(c);
       }
 
+      // A dud whose auto-sell didn't finish (restart, busy network): keep trying until the bag is sold
+      if (c.stage === "dud" && c.autoSellDud && !c.soldAt && c.stats.devBagSol > 0.001 && now - (c.sellRetryAt ?? 0) > 60_000) {
+        c.sellRetryAt = now;
+        try {
+          const got = await sellDevBag(c);
+          c.soldAt = now;
+          log(c, `Auto-sold dev bag for ${got.toFixed(4)} SOL (retry)`);
+          log(c, `Withdrew ${(await withdrawCoin(c)).toFixed(4)} SOL to main wallet`);
+        } catch (e) {
+          if (/holds no tokens/.test(e.message)) c.soldAt = now; // it did sell after all
+          else log(c, `Dud sell retry failed: ${e.message} - trying again in a minute`);
+        }
+        await refreshMoney(c);
+      }
+
       if (c.stage === "checks" && now >= c.launchedAt + c.checkMinutes * 60_000) {
         if (c.stats.outsideWallets >= c.minWallets) {
           c.stage = "earning";
