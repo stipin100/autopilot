@@ -51,7 +51,37 @@ const DATA = path.resolve(process.env.DATA_DIR || path.join(ROOT, "data"));
 const IMAGES = path.join(DATA, "images");
 fs.mkdirSync(IMAGES, { recursive: true });
 
-const rpc = new Connection(RPC_URL, "confirmed");
+// ---------- one lane for every Solana request ----------
+// The free Helius plan allows ~10 requests a second. Going over gets "429 Too Many Requests", and once a launch
+// stalled behind trade-watching that way. So every request waits its turn here: launch + money first, watching last.
+const RPC_PER_SEC = Number(process.env.RPC_PER_SEC || 8);
+const URGENT = new Set(["sendTransaction", "simulateTransaction", "getLatestBlockhash", "getSignatureStatuses"]);
+const WATCHING = new Set(["getSignaturesForAddress", "getTransaction"]);
+const lanes = [[], [], []]; // 0 urgent, 1 normal, 2 watching
+let rpcTokens = RPC_PER_SEC;
+function drainRpc() {
+  while (rpcTokens >= 1) {
+    const q = lanes.find((l) => l.length);
+    if (!q) return;
+    const job = q.shift();
+    rpcTokens -= job.cost;
+    job.go();
+  }
+}
+setInterval(() => { rpcTokens = Math.min(RPC_PER_SEC, rpcTokens + RPC_PER_SEC / 10); drainRpc(); }, 100).unref();
+async function rpcFetch(url, init) {
+  let methods = [];
+  try { const b = JSON.parse(init?.body ?? "{}"); methods = (Array.isArray(b) ? b : [b]).map((x) => x.method); } catch {}
+  const lane = methods.some((m) => URGENT.has(m)) ? 0 : methods.every((m) => WATCHING.has(m)) && methods.length ? 2 : 1;
+  for (let attempt = 0; ; attempt++) {
+    await new Promise((go) => { lanes[lane].push({ cost: Math.max(1, methods.length), go }); drainRpc(); });
+    const r = await fetch(url, init);
+    if (r.status !== 429 || attempt >= 4) return r;
+    await sleep(400 * 2 ** attempt); // over the limit anyway: back off instead of hammering
+  }
+}
+
+const rpc = new Connection(RPC_URL, { commitment: "confirmed", fetch: rpcFetch, disableRetryOnRateLimit: true });
 const online = new OnlinePumpSdk(rpc);
 const LOOKUP_TABLE = new PublicKey("Hyif6eWb8x88RVrvjPfabsgRYnwkVnyByEXTVTXbUcyP"); // Pump.fun's shared accounts
 const SOL = LAMPORTS_PER_SOL;
@@ -435,7 +465,7 @@ async function getTransactions(sigs) {
   for (let i = 0; i < sigs.length; i += 5) {
     const part = sigs.slice(i, i + 5);
     for (let attempt = 0; ; attempt++) {
-      const r = await fetch(RPC_URL, {
+      const r = await rpcFetch(RPC_URL, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(part.map((s, n) => ({ jsonrpc: "2.0", id: n, method: "getTransaction", params: [s, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }] }))),
       });
@@ -2387,20 +2417,31 @@ importSeed();
 function importSeedSettings() {
   const f = path.join(ROOT, "seed-settings.json");
   if (!fs.existsSync(f)) return;
-  let s;
-  try { s = JSON.parse(fs.readFileSync(f, "utf8")); } catch { return console.error("seed-settings.json is not valid JSON"); }
+  let list;
+  try { list = JSON.parse(fs.readFileSync(f, "utf8")); } catch { return console.error("seed-settings.json is not valid JSON"); }
   settings.seedSettingsApplied ??= [];
-  if (!s?.id || settings.seedSettingsApplied.includes(s.id)) return;
   const allowed = ["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX"];
-  const body = Object.fromEntries(Object.entries(s.settings ?? {}).filter(([k]) => allowed.includes(k)));
-  try {
-    saveAutopilot(body);
-  } catch (e) {
-    return console.error("seed-settings.json:", e.message);
+  for (const s of Array.isArray(list) ? list : [list]) {
+    if (!s?.id || settings.seedSettingsApplied.includes(s.id)) continue;
+    const body = Object.fromEntries(Object.entries(s.settings ?? {}).filter(([k]) => allowed.includes(k)));
+    try {
+      if (Object.keys(body).length) saveAutopilot(body);
+    } catch (e) {
+      console.error("seed-settings.json:", e.message);
+      continue;
+    }
+    // queueFirst: these booked coins (by ticker) jump to the front of the queue, in this order
+    const first = (s.queueFirst ?? []).map((t) => brands.find((b) => b.symbol === String(t).toUpperCase() && b.status === "approved")).filter(Boolean);
+    if (first.length) {
+      const top = Math.min(0, ...brands.filter((b) => b.status === "approved").map((b) => b.order)) - first.length;
+      first.forEach((b, i) => { b.order = top + i; delete b.notBefore; });
+      save();
+    }
+    settings.seedSettingsApplied.push(s.id);
+    writeJson("settings.json", settings);
+    if (Object.keys(body).length) apLog(`Schedule set from the chat: ${Object.entries(body).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+    if (first.length) apLog(`Moved to the front of the queue: ${first.map((b) => b.name).join(", ")}`);
   }
-  settings.seedSettingsApplied.push(s.id);
-  writeJson("settings.json", settings);
-  apLog(`Schedule set from the chat: ${Object.entries(body).map(([k, v]) => `${k} ${v}`).join(", ")}`);
 }
 importSeedSettings();
 

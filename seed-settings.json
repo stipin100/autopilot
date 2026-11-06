@@ -1,5 +1,12 @@
-{
-  "id": "2026-11-06-overnight",
-  "why": "Owner asked: run the 10 new coins 12 AM - 7 AM (22:00 start keeps tonight's last coins going)",
-  "settings": { "windowStart": 22, "windowEnd": 7, "maxLaunchesPerDay": 15 }
-}
+[
+  {
+    "id": "2026-11-06-overnight",
+    "why": "Owner asked: run the 10 new coins 12 AM - 7 AM (22:00 start keeps tonight's last coins going)",
+    "settings": { "windowStart": 22, "windowEnd": 7, "maxLaunchesPerDay": 15 }
+  },
+  {
+    "id": "2026-11-06-pay-first",
+    "why": "Owner asked: coins with pay / paid / fee in the name go out first",
+    "queueFirst": ["AGPAID", "PADPAY", "FEERADAR"]
+  }
+]
