@@ -25,7 +25,8 @@ import { buildSite, updateSiteCA, siteConfig, bannerPath } from "./sitemaker.mjs
 import { SOL_MINT, isPair, pairList, priceInSol, swap } from "./pairs.mjs";
 import { createBrain } from "./brain.mjs";
 import { checkClash, checkName, makeIdeas } from "./ideas.mjs";
-import { aiError, aiReady, aiVia, claudeCodeInstalled } from "./ai.mjs";
+import { aiError, aiReady, aiVia, askJson, claudeCodeInstalled } from "./ai.mjs";
+import { z } from "zod";
 import { makeArt } from "./art.mjs";
 import { planSite, renderSite, templatePlan } from "./sites.mjs";
 import { createX, xAppReady } from "./xauth.mjs";
@@ -309,11 +310,36 @@ async function postOnX(text) {
   return j.data?.id;
 }
 
-/** The post that goes out ~30s before launch (no CA yet - that comes in the reply). */
+/** One short line about the coin: its tagline, else the first sentence of its description. */
+function shortLine(b, c) {
+  const s = (b?.tagline || c.description || "").replace(/\s+/g, " ").trim();
+  const first = s.match(/^.{10,}?[.!?](?=\s|$)/)?.[0] ?? s;
+  return first.length > 140 ? `${first.slice(0, 137).trim()}…` : first;
+}
+/** The "What if…?" hook: written per coin (Claude or you), else a built-in one. */
+function whatIfLine(b, c) {
+  if (b?.whatIf) return b.whatIf;
+  const n = c.name;
+  const lines = [`What if ${n} is the one everyone talks about tomorrow?`, `What if the next big thing is ${n}?`, `What if you didn't fade ${n} this time?`, `What if ${n} was here all along?`];
+  return lines[[...c.symbol].reduce((a, ch) => a + ch.charCodeAt(0), 0) % lines.length];
+}
+const DEFAULT_LAUNCH_POST = "Introducing {NAME}\n\nIt's now LIVE 🚀\n\n{WHATIF}\n\n{SHORT}";
+
+/** The post that goes out ~30s before launch, with the banner (no CA yet - that comes in the reply). */
 function launchPostText(c) {
   const b = brands.find((x) => x.id === c.brandId);
-  const t = b?.launchPost || `${c.name} $${c.symbol}\n\n${(b?.tagline || c.description || "").slice(0, 160)}\n\n${c.website || ""}`;
-  return t.replaceAll("{NAME}", c.name).replaceAll("{TICKER}", c.symbol).replaceAll("{WEBSITE}", c.website || "").trim();
+  return (b?.launchPost || DEFAULT_LAUNCH_POST)
+    .replaceAll("{NAME}", c.name).replaceAll("{TICKER}", c.symbol).replaceAll("{WEBSITE}", c.website || "")
+    .replaceAll("{WHATIF}", whatIfLine(b, c)).replaceAll("{SHORT}", shortLine(b, c))
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+/** The banner (or the logo when there's no banner) to attach to the launch post. */
+function launchPostImage(c) {
+  const b = brands.find((x) => x.id === c.brandId);
+  for (const [f, type] of [[b?.banner, "image/png"], [c.image, c.imageType], [b?.image, b?.imageType]]) {
+    if (f && fs.existsSync(path.join(IMAGES, f))) return { bytes: fs.readFileSync(path.join(IMAGES, f)), type: type || "image/png" };
+  }
+  return null;
 }
 
 function postText(c) {
@@ -773,12 +799,12 @@ async function step(c) {
         const handle = xa.find(c.xAccountId)?.handle;
         if (SIMULATE) {
           c.xPostId = "practice";
-          log(c, `Practice: would post on X from @${handle ?? "?"}: "${launchPostText(c).split("\n")[0]}…"`);
+          log(c, `Practice: would post on X from @${handle ?? "?"}${launchPostImage(c) ? " with the banner" : ""}: "${launchPostText(c).replace(/\n+/g, " / ")}"`);
         } else {
           try {
-            const p = await xa.post(c.xAccountId, launchPostText(c));
+            const p = await xa.post(c.xAccountId, launchPostText(c), null, launchPostImage(c));
             Object.assign(c, { xPostId: p.id, twitter: p.url, uri: null, posted: true });
-            log(c, `Posted on X from @${handle}: ${p.url}`);
+            log(c, `Posted on X from @${handle}: ${p.url}${p.imageError ? ` (without the banner: ${p.imageError})` : " with the banner"}`);
           } catch (e) {
             log(c, `X launch post failed: ${e.message} - launching without it`);
           }
@@ -1211,6 +1237,15 @@ async function prepTick() {
       try {
         b.plan = await planSite(b);
         b.prep.site = b.plan.by;
+        if (!b.whatIf && aiReady()) {
+          // the hook line for the X launch post; if this fails the built-in line is used
+          b.whatIf = await askJson(
+            z.object({ whatIf: z.string().max(120) }),
+            "You write one short, punchy 'What if...?' hook line for a meme coin's launch post on X. Under 100 characters, ends with a question mark, no hashtags, no emojis, no price or profit promises.",
+            `Coin: ${b.name} ($${b.symbol}). What it is: ${b.tagline || b.description || b.name}`,
+            1000,
+          ).then((r) => (/^what if/i.test(r.whatIf.trim()) ? r.whatIf.trim() : null)).catch(() => null);
+        }
         apLog(`${b.name}: website ready at ${siteUrl(b)} (${b.plan.by === "claude" ? "written by Claude" : "template text - add a Claude key for custom writing"})`);
       } catch (e) {
         b.plan = templatePlan(b); // never leave a coin without a site
@@ -1546,6 +1581,7 @@ async function approveBrand(form) {
   Object.assign(b, {
     name, symbol, description: str("description").slice(0, 1000) || b.description, xPost: str("xPost").slice(0, 280) || b.xPost,
     launchPost: str("launchPost").slice(0, 280), siteDirection: direction, xAccountId: xId,
+    whatIf: str("whatIf").slice(0, 140) || b.whatIf || "",
     website: optUrl("website"), twitter: optUrl("twitter"), telegram: optUrl("telegram"),
   });
   slugOf(b);

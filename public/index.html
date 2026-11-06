@@ -796,7 +796,8 @@ CA: {CA}
         <div class="full"><label>Website direction for Claude (optional - e.g. "make it feel like a bank app")</label><input name="siteDirection" maxlength="400"></div>
         <div><label>Posts from X account</label><select name="xAccountId" id="mX"></select></div>
         <div><label>Own website instead (optional)</label><input name="website" placeholder="https://..."></div>
-        <div class="full"><label>Launch post on X (~30s before launch; empty = name, pitch + website)</label><textarea name="launchPost" maxlength="280" placeholder="{NAME} ${TICKER} ..."></textarea></div>
+        <div class="full"><label>"What if…?" line for the launch post (empty = Claude or a built-in one)</label><input name="whatIf" maxlength="140" placeholder="What if the sell button was never pressed?"></div>
+        <div class="full"><label>Launch post on X (~30s before launch, with the banner). Empty = the standard post below. {NAME} {TICKER} {WHATIF} {SHORT} {WEBSITE} fill in.</label><textarea name="launchPost" maxlength="280" placeholder="Introducing {NAME}&#10;&#10;It&#39;s now LIVE 🚀&#10;&#10;{WHATIF}&#10;&#10;{SHORT}"></textarea></div>
         <div class="full"><label>CA reply after launch ({CA} {WEBSITE} {LINK} filled in)</label><textarea name="xPost" maxlength="280"></textarea></div>
         <div><label>X link (optional, else the launch post)</label><input name="twitter" placeholder="https://x.com/..."></div>
         <div><label>Telegram (optional)</label><input name="telegram" placeholder="https://t.me/..."></div>
@@ -1369,7 +1370,7 @@ function openApprove(id) {
   if (!b) return;
   const f = $("#approveForm");
   f.dataset.id = id;
-  for (const k of ["name", "symbol", "description", "website", "twitter", "telegram", "xPost", "launchPost", "siteDirection"]) f.elements[k].value = b[k] ?? "";
+  for (const k of ["name", "symbol", "description", "website", "twitter", "telegram", "xPost", "launchPost", "siteDirection", "whatIf"]) f.elements[k].value = b[k] ?? "";
   const m = state.makers;
   const def = m.xAccounts.find((a) => a.id === m.defaultX);
   $("#mX").innerHTML = `<option value="auto">${def ? `Default (@${esc(def.handle)})` : "Default (none connected yet)"}</option>`

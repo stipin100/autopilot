@@ -6,7 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 const AUTH = "https://x.com/i/oauth2/authorize";
 const TOKEN = "https://api.x.com/2/oauth2/token";
-const SCOPES = "tweet.read tweet.write users.read offline.access";
+const SCOPES = "tweet.read tweet.write users.read media.write offline.access"; // media.write = attach the banner
 
 export const xAppReady = () => !!((process.env.X_CLIENT_ID || "").trim() && (process.env.X_CLIENT_SECRET || "").trim());
 
@@ -61,18 +61,36 @@ export function createX({ readSecret, writeSecret }) {
     return acc.access;
   }
 
-  /** Posts (or replies) from one connected account. Returns { id, url }. */
-  async function post(accountId, text, replyTo) {
+  /** Uploads one picture for a post. Returns its media id. */
+  async function uploadImage(acc, { bytes, type }) {
+    const form = new FormData();
+    form.append("media", new Blob([bytes], { type }), type === "image/png" ? "banner.png" : "banner.jpg");
+    form.append("media_category", "tweet_image");
+    const r = await fetch("https://api.x.com/2/media/upload", { method: "POST", headers: { Authorization: `Bearer ${await fresh(acc)}` }, body: form });
+    const j = await r.json().catch(() => ({}));
+    const id = j.data?.id ?? j.media_id_string;
+    if (r.status === 403) throw new Error(`@${acc.handle} was connected before pictures were allowed - press Connect X again for it`);
+    if (!r.ok || !id) throw new Error(`X picture upload said ${r.status}: ${JSON.stringify(j).slice(0, 120)}`);
+    return String(id);
+  }
+
+  /**
+   * Posts (or replies) from one connected account, with an optional picture { bytes, type }.
+   * If only the picture fails, it still posts the text. Returns { id, url, imageError? }.
+   */
+  async function post(accountId, text, replyTo, image) {
     const acc = accounts.find((a) => a.id === accountId);
     if (!acc) throw new Error("That X account isn't connected any more");
-    const body = { text: text.slice(0, 280), ...(replyTo && { reply: { in_reply_to_tweet_id: replyTo } }) };
+    let mediaId = null, imageError = null;
+    if (image) mediaId = await uploadImage(acc, image).catch((e) => { imageError = e.message; return null; });
+    const body = { text: text.slice(0, 280), ...(replyTo && { reply: { in_reply_to_tweet_id: replyTo } }), ...(mediaId && { media: { media_ids: [mediaId] } }) };
     const send = async () => fetch("https://api.x.com/2/tweets", { method: "POST", headers: { Authorization: `Bearer ${await fresh(acc)}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
     let r = await send();
     if (r.status === 401) { acc.expires = 0; r = await send(); } // token went stale early: refresh once
     const j = await r.json().catch(() => ({}));
     if (r.status === 402) throw new Error("X says your API credits ran out - top up at developer.x.com");
     if (!r.ok || !j.data?.id) throw new Error(`X said ${r.status}: ${JSON.stringify(j).slice(0, 160)}`);
-    return { id: j.data.id, url: `https://x.com/${acc.handle}/status/${j.data.id}` };
+    return { id: j.data.id, url: `https://x.com/${acc.handle}/status/${j.data.id}`, imageError };
   }
 
   function remove(accountId) {
