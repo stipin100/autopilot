@@ -2468,6 +2468,17 @@ function importSeedSettings() {
       first.forEach((b, i) => { b.order = top + i; delete b.notBefore; });
       save();
     }
+    // clearIdeas: every coin that hasn't launched leaves the queue (ideas -> rejected, booked -> retired). A coin mid-launch is left alone.
+    if (s.clearIdeas) {
+      const gone = [];
+      for (const b of brands) {
+        if (b.status === "idea") { b.status = "rejected"; gone.push(b.name); }
+        else if (b.status === "approved") { b.status = "retired"; gone.push(b.name); }
+      }
+      save();
+      apLog(`Cleared ${gone.length} ideas from the chat: ${gone.join(", ") || "none"}`);
+      console.log(`[autopilot] cleared ${gone.length} ideas (${gone.join(", ")}) · still live: ${brands.filter((b) => b.status === "live").map((b) => b.name).join(", ") || "none"} · ideasPerDay ${settings.ideasPerDay}`);
+    }
     settings.seedSettingsApplied.push(s.id);
     writeJson("settings.json", settings);
     if (Object.keys(body).length) apLog(`Schedule set from the chat: ${Object.entries(body).map(([k, v]) => `${k} ${v}`).join(", ")}`);

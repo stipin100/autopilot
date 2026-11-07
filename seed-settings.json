@@ -8,5 +8,10 @@
     "id": "2026-11-06-pay-first",
     "why": "Owner asked: coins with pay / paid / fee in the name go out first",
     "queueFirst": ["AGPAID", "PADPAY", "FEERADAR"]
+  },
+  {
+    "id": "2026-11-07-clear-ideas",
+    "why": "Owner asked: remove all the ideas",
+    "clearIdeas": true
   }
 ]
