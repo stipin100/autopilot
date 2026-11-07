@@ -938,6 +938,17 @@ async function step(c) {
         await refreshMoney(c);
       }
 
+      // Bag sold but the SOL never left the coin wallet (a claim/withdraw step timed out): send it home
+      if (c.stage !== "checks" && c.soldAt && (c.stats.walletSol ?? 0) > 0.02 && now - (c.withdrawRetryAt ?? 0) > 60_000) {
+        c.withdrawRetryAt = now;
+        try {
+          log(c, `Withdrew ${(await withdrawCoin(c)).toFixed(4)} SOL to main wallet (left behind after the sell)`);
+        } catch (e) {
+          log(c, `Withdraw retry failed: ${e.message} - trying again in a minute`);
+        }
+        await refreshMoney(c);
+      }
+
       if (c.stage === "checks" && now >= c.launchedAt + c.checkMinutes * 60_000) {
         if (c.stats.outsideWallets >= c.minWallets) {
           c.stage = "earning";
