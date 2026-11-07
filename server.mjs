@@ -983,7 +983,7 @@ async function markDud(c, why) {
       if (c.stats.claimable > 0.001) log(c, `Claimed ${(await claimFees(c)).toFixed(4)} SOL fees`);
       log(c, `Withdrew ${(await withdrawCoin(c)).toFixed(4)} SOL to main wallet`);
     } catch (e) {
-      log(c, `Auto-sell failed: ${e.message} - press "Sell dev bag"`);
+      log(c, c.soldAt ? `Sold, but sending the SOL home failed: ${e.message} - retrying by itself` : `Auto-sell failed: ${e.message} - press "Sell dev bag"`);
     }
     await refreshMoney(c).catch(() => {});
   }
@@ -1548,12 +1548,19 @@ function alertOnce(key, title, msg, everyMs = 60 * 60_000) {
   alertSent.set(key, Date.now());
   sendAlert(title, msg).catch((e) => console.error("[alerts]", e.message));
 }
+// A coin problem waits 3 minutes: most "network busy" misses fix themselves on the next try, so only still-broken ones ping.
+const coinPending = new Map(); // coin id -> timer
 function coinProblemAlert(c, msg) {
   try {
-    if (!/fail|couldn't|not confirmed|error/i.test(msg) || /Failed the \d+-min check/i.test(msg)) return;
+    if (/LAUNCHED|Auto-sold|sold dev bag|Withdrew|Posted on X|brought .* back/i.test(msg)) {
+      clearTimeout(coinPending.get(c.id)); coinPending.delete(c.id); return; // it worked after all
+    }
+    if (!/fail|couldn't|not confirmed|error/i.test(msg) || /Failed the \d+-min check/i.test(msg) || coinPending.has(c.id)) return;
     const kind = msg.toLowerCase().replace(/[^a-z ]/g, "").split(" ").slice(0, 3).join(" ");
-    const retry = /trying again|retry|press/i.test(msg) ? " AUTOPILOT keeps trying by itself." : "";
-    alertOnce(`coin:${c.id}:${kind}`, `${c.name || c.symbol}: problem`, `${msg}${retry}`, 30 * 60_000);
+    coinPending.set(c.id, setTimeout(() => {
+      coinPending.delete(c.id);
+      alertOnce(`coin:${c.id}:${kind}`, `${c.name || c.symbol}: problem`, `${msg} (still not fixed after 3 min - open AUTOPILOT to check this coin)`, 30 * 60_000);
+    }, 3 * 60_000));
   } catch {}
 }
 let windowOpenedAt = 0, holdKind = "", holdSince = 0;
@@ -2511,6 +2518,7 @@ function importSeed() {
       word: "", why: "added for you by Claude", xPost: `${name} $${symbol} is live\n\nCA: {CA}`, xAccountId: "auto",
       check: checkName({ name, symbol }, ideaContext()),
     }, "you");
+    if (it.idea) { apLog(`${name} $${symbol} added as an idea - waiting for your OK`); added++; continue; } // just an idea: waits in Ideas for approval
     Object.assign(b, { status: "approved", approvedAt: Date.now(), order: Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1)) });
     slugOf(b);
     apLog(`${name} $${symbol} added + approved from the coin list - making its logo, banner and website`);
