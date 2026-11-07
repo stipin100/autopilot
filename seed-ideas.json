@@ -1,47 +1,14 @@
 [
-  {
-    "name": "Signal Pad",
-    "symbol": "SIGNALPAD",
-    "tagline": "hear the trend first",
-    "description": "An AI agent that watches X and pings you the moment a new narrative starts. Hear the trend before the timeline does.",
-    "whatIf": "What if your phone buzzed before the trend did?"
-  },
-  {
-    "name": "Hive Agent",
-    "symbol": "HIVEAGENT",
-    "tagline": "one prompt, a hundred workers",
-    "description": "A swarm of AI agents that split any job, run it together and report back in seconds. One prompt, a hundred workers.",
-    "whatIf": "What if one prompt hired a hundred agents?"
-  },
-  {
-    "name": "Wallet Lens",
-    "symbol": "WALLETLENS",
-    "tagline": "every wallet has a story",
-    "description": "Paste any wallet and get its whole story in plain English: what it bought, sold and who it follows.",
-    "whatIf": "What if every wallet came with a story?"
-  },
-  {
-    "name": "Ghost Inbox",
-    "symbol": "GHOSTINBOX",
-    "tagline": "on-chain whispers",
-    "description": "Send an anonymous message to any Solana wallet. No names, no accounts, just on-chain whispers.",
-    "whatIf": "What if you could DM any wallet?"
-  },
-  {
-    "name": "Rug Radar",
-    "symbol": "RUGRADAR",
-    "tagline": "see the rug before it moves",
-    "description": "Scans every new coin for red flags in seconds, before you ape. Dev wallets, bundles, holders, all in one look.",
-    "whatIf": "What if you saw the rug before it moved?"
-  },
-  { "name": "Agent Paid", "symbol": "AGPAID", "tagline": "your agent pays, you approve", "description": "An AI agent that sends crypto payments for you: split bills, pay friends, tip creators, all from one chat.", "whatIf": "What if your agent paid the bill for you?" },
-  { "name": "Pad Pay", "symbol": "PADPAY", "tagline": "every launch pays you back", "description": "A launchpad that pays creators: every coin's fees stream back to the wallet that launched it, claimed automatically.", "whatIf": "What if every launch paid you back?" },
-  { "name": "Chart Agent", "symbol": "CHARTAGENT", "tagline": "every chart, explained", "description": "Paste any chart and the agent explains it in plain English: trend, volume, holders, in ten seconds.", "whatIf": "What if every chart could talk?" },
-  { "name": "Bot Shield", "symbol": "BOTSHIELD", "tagline": "snipers hit a wall", "description": "Protects your launch from sniper bots: spots bundles and block-zero buyers the moment you go live.", "whatIf": "What if snipers hit a wall?" },
-  { "name": "Meme Lab", "symbol": "MEMELAB", "tagline": "one prompt, a whole meme kit", "description": "An AI studio that makes memes, stickers and banners for any coin from one prompt.", "whatIf": "What if one prompt made your whole meme kit?" },
-  { "name": "Thread Agent", "symbol": "THREADAI", "tagline": "threads that write themselves", "description": "Turns any idea into a ready-to-post X thread, hooks and all.", "whatIf": "What if your threads wrote themselves?" },
-  { "name": "Holder Bot", "symbol": "HOLDERBOT", "tagline": "never miss a milestone", "description": "A Telegram bot that pings your holders on every milestone, buy wall and new high.", "whatIf": "What if your holders never missed a pump?" },
-  { "name": "Fee Radar", "symbol": "FEERADAR", "tagline": "no fee left behind", "description": "Finds unclaimed creator fees across all your coins and claims them in one tap.", "whatIf": "What if no fee was ever left behind?" },
-  { "name": "Narrative AI", "symbol": "NARRATIVE", "tagline": "know the next narrative first", "description": "Reads X and Pump.fun all day and tells you which narrative is heating up next.", "whatIf": "What if you knew the next narrative first?" },
-  { "name": "Agent Market", "symbol": "AGENTMKT", "tagline": "hire an agent in one click", "description": "A marketplace where you hire AI agents by the job and pay per task.", "whatIf": "What if hiring an agent took one click?" }
+  { "name": "Launch Agent", "symbol": "LAUNCHAI", "tagline": "one prompt, one coin", "description": "An AI agent that turns one prompt into a full coin: name, logo, website and launch, done in a minute.", "whatIf": "What if one prompt launched your whole coin?" },
+  { "name": "Guard Agent", "symbol": "GUARDAI", "tagline": "checks before you sign", "description": "Reads every transaction before you sign it and blocks drainers, fake approvals and bad links.", "whatIf": "What if your wallet checked every signature for you?" },
+  { "name": "Swap Agent", "symbol": "SWAPAGENT", "tagline": "just say the swap", "description": "Type 'swap half my SOL to USDC' and the agent finds the best route and does it.", "whatIf": "What if swapping was just one sentence?" },
+  { "name": "Whale Agent", "symbol": "WHALEAI", "tagline": "know when whales move", "description": "Follows the top Solana wallets and pings you the second they buy, sell or bridge.", "whatIf": "What if you saw every whale move first?" },
+  { "name": "Airdrop Agent", "symbol": "DROPAGENT", "tagline": "never miss a drop", "description": "Finds every airdrop your wallet qualifies for and does the tasks for you.", "whatIf": "What if an agent farmed airdrops while you slept?" },
+  { "name": "Gas Agent", "symbol": "GASAGENT", "tagline": "pay less on every tx", "description": "Times your transactions and sets the cheapest priority fee that still lands fast.", "whatIf": "What if you never overpaid gas again?" },
+  { "name": "Dev Check", "symbol": "DEVCHECK", "tagline": "know the dev first", "description": "Paste any coin and the agent scores its dev wallet: past launches, rugs, holds and sells.", "whatIf": "What if every dev came with a report card?" },
+  { "name": "Alpha Inbox", "symbol": "ALPHABOX", "tagline": "200 groups, one digest", "description": "Reads hundreds of alpha groups and X accounts and sends you one short digest a day.", "whatIf": "What if all the alpha fit in one message?" },
+  { "name": "Copy Agent", "symbol": "COPYAGENT", "tagline": "copy the best, your size", "description": "Copies the trades of wallets you pick, with your own size limits and stop rules.", "whatIf": "What if the best wallets traded for you?" },
+  { "name": "Yield Agent", "symbol": "YIELDAI", "tagline": "idle cash, always working", "description": "Moves your idle stablecoins to the best safe yield on Solana, checked every hour.", "whatIf": "What if your idle USDC never slept?" },
+  { "name": "Voice Agent", "symbol": "VOICEAI", "tagline": "talk to your wallet", "description": "Check balances, swap and send just by talking. Your wallet, voice controlled.", "whatIf": "What if you could talk to your wallet?" },
+  { "name": "Tax Agent", "symbol": "TAXAGENT", "tagline": "taxes in one click", "description": "Turns your whole wallet history into a clean, ready-to-file tax report.", "whatIf": "What if crypto taxes took one click?" }
 ]

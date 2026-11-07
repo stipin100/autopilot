@@ -13,5 +13,10 @@
     "id": "2026-11-07-clear-ideas",
     "why": "Owner asked: remove all the ideas",
     "clearIdeas": true
+  },
+  {
+    "id": "2026-11-07-twelve-in-20h",
+    "why": "Owner asked: 12 new coins, start 2 hours from now (12 PM), 1 launch each, all within 20 hours (by 8 AM)",
+    "settings": { "windowStart": 12, "windowEnd": 8, "minGapMinutes": 100, "maxLaunchesPerDay": 20, "triesPerDay": 1, "maxDays": 1 }
   }
 ]
