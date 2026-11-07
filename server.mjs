@@ -225,6 +225,7 @@ function log(c, msg) {
   c.log.unshift({ t: Date.now(), msg });
   c.log.length = Math.min(c.log.length, 60);
   console.log(`[${c.symbol}] ${msg}`);
+  coinProblemAlert(c, msg);
   save();
 }
 
@@ -1521,7 +1522,71 @@ setInterval(async () => {
   } finally {
     apTicking = false;
   }
+  try { watchAlerts(); } catch (e) { console.error("[alerts]", e.message); }
 }, 10_000);
+
+// ---------- phone alerts (ntfy.sh - free app, no account) ----------
+// The owner installs "ntfy" on their phone and subscribes to the secret topic shown in More -> Phone alerts.
+// Only problems are sent: launches stuck, money too low, failed sells/withdraws/posts. Duds are normal and stay quiet.
+let alertCfg = readSecret("alerts.json", null);
+if (!alertCfg?.topic) { alertCfg = { on: true, topic: `autopilot-${randomBytes(9).toString("hex")}` }; writeSecret("alerts.json", alertCfg); }
+const alertSent = new Map();
+const appUrl = () => (process.env.PUBLIC_URL || "https://autopilot-cndt.onrender.com").trim().replace(/\/$/, "");
+async function sendAlert(title, msg, { priority = 4, tags = "warning", force = false } = {}) {
+  if (!force && (!alertCfg.on || SIMULATE)) return false;
+  const r = await fetch(`https://ntfy.sh/${alertCfg.topic}`, {
+    method: "POST",
+    headers: { Title: String(title).replace(/[^\x20-\x7e]/g, "").slice(0, 120), Priority: String(priority), Tags: tags, Click: appUrl() },
+    body: String(msg).slice(0, 1000),
+  });
+  if (!r.ok) throw new Error(`ntfy said ${r.status}`);
+  console.log(`[alerts] sent: ${title} - ${msg}`);
+  return true;
+}
+function alertOnce(key, title, msg, everyMs = 60 * 60_000) {
+  if (Date.now() - (alertSent.get(key) ?? 0) < everyMs) return;
+  alertSent.set(key, Date.now());
+  sendAlert(title, msg).catch((e) => console.error("[alerts]", e.message));
+}
+function coinProblemAlert(c, msg) {
+  try {
+    if (!/fail|couldn't|not confirmed|error/i.test(msg) || /Failed the \d+-min check/i.test(msg)) return;
+    const kind = msg.toLowerCase().replace(/[^a-z ]/g, "").split(" ").slice(0, 3).join(" ");
+    const retry = /trying again|retry|press/i.test(msg) ? " AUTOPILOT keeps trying by itself." : "";
+    alertOnce(`coin:${c.id}:${kind}`, `${c.name || c.symbol}: problem`, `${msg}${retry}`, 30 * 60_000);
+  } catch {}
+}
+let windowOpenedAt = 0, holdKind = "", holdSince = 0;
+const BLOCKING = /^(Float too low|Problem|Spending lock|Paused|Autopilot is off|Daily cap|PINATA_JWT|A launch is getting ready)/;
+function watchAlerts() {
+  const now = Date.now();
+  const open = inWindow();
+  if (!open) { windowOpenedAt = 0; holdKind = ""; return; }
+  if (!windowOpenedAt) windowOpenedAt = now;
+  const queued = brands.some((b) => b.status === "approved" || b.status === "live");
+  if (!queued) return;
+  // a status that stops launches, held for a while (a launch getting ready is normal for ~10 min)
+  const m = String(apStatus).match(BLOCKING);
+  const kind = m ? m[1] : "";
+  if (kind !== holdKind) { holdKind = kind; holdSince = now; }
+  const holdFor = kind === "A launch is getting ready" ? 25 * 60_000 : kind === "Problem" ? 5 * 60_000 : 2 * 60_000;
+  if (kind && now - holdSince >= holdFor) {
+    const tip = {
+      "Float too low": "Send SOL to the main wallet, or lower the dev buy in More.",
+      "Spending lock": "Turn the spending lock off in More if you want launches.",
+      "Autopilot is off": "Turn autopilot on in More.",
+      "Paused": "Un-pause in More.",
+      "A launch is getting ready": "A launch looks stuck - open AUTOPILOT and check the coin.",
+    }[kind] || "Open AUTOPILOT to check.";
+    alertOnce(`status:${kind}`, "AUTOPILOT: launches stopped", `${apStatus}. ${tip}`, 60 * 60_000);
+  }
+  // no launch for much longer than the gap, while coins are waiting
+  const lastLaunch = Math.max(0, ...coins.filter((c) => c.auto).map((c) => c.createdAt));
+  const quietMin = (now - Math.max(lastLaunch, windowOpenedAt)) / 60_000;
+  if (settings.autopilot && quietMin > settings.minGapMinutes + 40) {
+    alertOnce("stall", "AUTOPILOT: no launch lately", `No launch for ${Math.round(quietMin)} min but coins are waiting. Now: ${apStatus}`, 90 * 60_000);
+  }
+}
 
 function saveAutopilot(body) {
   const num = (k, lo, hi) => {
@@ -2094,6 +2159,18 @@ const server = http.createServer(async (req, res) => {
         }
         res.setHeader("Set-Cookie", "ap=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
         return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/api/alerts") {
+        // get · test (sends one now) · on · off
+        if (body.action === "test") {
+          await sendAlert("AUTOPILOT test alert", "Phone alerts work. You'll get a message like this only when launches have a problem.", { priority: 3, tags: "white_check_mark", force: true })
+            .catch((e) => { throw new UserError(`Couldn't send: ${e.message}`); });
+        } else if (body.action === "on" || body.action === "off") {
+          alertCfg.on = body.action === "on";
+          writeSecret("alerts.json", alertCfg);
+          apLog(`Phone alerts turned ${body.action}`);
+        }
+        return json(res, 200, { on: alertCfg.on, topic: alertCfg.topic });
       }
       if (url.pathname === "/api/2fa") {
         // setup: make a new secret (not on yet) · enable: prove the app shows the right code · disable: password + code

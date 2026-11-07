@@ -564,6 +564,7 @@
       </div>
       <div class="card"><h2>Your settings</h2><p class="hint">Changes save right away.</p><div id="sRows"></div></div>
       <div class="card"><h2>Profit</h2><div id="pRows"></div></div>
+      <div class="card"><h2>Phone alerts</h2><p class="hint">Your phone buzzes only when something is wrong: no launch, money too low, a sell or X post that failed. Duds stay quiet.</p><div id="alertBox"><span class="muted small">Loading…</span></div></div>
       <div class="card"><h2>Security</h2><p class="hint" id="secNote"></p><div id="secBox"></div></div>
     </section>
 
@@ -1825,10 +1826,36 @@ function renderMore() {
   const typing = document.activeElement?.closest?.("#sRows, #pRows");
   if (!typing) { $("#sRows").html = rowsHtml(SROWS); $("#pRows").html = rowsHtml(PROWS); }
   $("#secNote").textContent = state.public ? "Turn on the 6-digit login code so nobody can get in with just the password - AUTOPILOT holds money." : "The password and login code only apply to the online AUTOPILOT.";
+  renderAlerts();
   if (totpSetup) return; // keep the QR code on screen while you set it up
   $("#secBox").html = `<div class="row">${state.totp ? `<span class="chip safe">✓ Login code is on</span><button class="btn sm" id="totpOff">Turn it off</button>` : `<button class="btn lime glow" id="totpOn">Turn on the login code</button>`}
     ${state.public ? `<button class="btn" id="logoutAll">Log out all devices</button><button class="btn ghost" id="logoutMe">Log out</button>` : ""}</div>`;
 }
+
+let alertsData = null, alertsLoading = false;
+function renderAlerts() {
+  const box = $("#alertBox");
+  if (!box) return;
+  if (!alertsData) {
+    if (!alertsLoading) { alertsLoading = true; post("/api/alerts", {}).then((d) => { alertsData = d; renderAlerts(); }).catch(() => {}).finally(() => { alertsLoading = false; }); }
+    return;
+  }
+  const d = alertsData;
+  box.innerHTML = `<ol class="small muted" style="line-height:1.9;padding-left:18px;margin:0 0 12px">
+    <li>On your phone, install the free app <b>ntfy</b> (App Store / Play Store).</li>
+    <li>Open it, tap <b>+</b>, and type this topic name exactly:<br>
+      <span class="mono" style="color:var(--text);word-break:break-all;user-select:all">${esc(d.topic)}</span> <button class="btn sm" id="alertCopy">Copy</button></li>
+    <li>Tap <b>Subscribe</b>, allow notifications, then press <b>Send test</b> below.</li></ol>
+    <div class="row">${d.on ? `<span class="chip safe">✓ Alerts are on</span><button class="btn lime" id="alertTest">Send test</button><button class="btn ghost sm" id="alertOff">Turn off</button>` : `<span class="chip">Alerts are off</span><button class="btn lime" id="alertOn">Turn on</button>`}</div>
+    <div class="muted small" style="margin-top:8px">Keep the topic name private - anyone with it could read your alerts.</div>`;
+}
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (!t.closest) return;
+  if (t.closest("#alertCopy")) { try { await navigator.clipboard.writeText(alertsData.topic); toast("Topic copied"); } catch { toast("Press and hold the topic to copy it"); } }
+  if (t.closest("#alertTest")) { try { await post("/api/alerts", { action: "test" }); toast("Test sent - check your phone"); } catch (err) { toast(err.message); } }
+  if (t.closest("#alertOn") || t.closest("#alertOff")) { try { alertsData = await post("/api/alerts", { action: t.closest("#alertOn") ? "on" : "off" }); renderAlerts(); } catch (err) { toast(err.message); } }
+});
 
 // ---------- hooks into the main page ----------
 function renderV2(now) {
