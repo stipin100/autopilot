@@ -2536,7 +2536,7 @@ function importSeedSettings() {
   let list;
   try { list = JSON.parse(fs.readFileSync(f, "utf8")); } catch { return console.error("seed-settings.json is not valid JSON"); }
   settings.seedSettingsApplied ??= [];
-  const allowed = ["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX"];
+  const allowed = ["minGapMinutes", "windowStart", "windowEnd", "triesPerDay", "retryGapMinutes", "maxDays", "maxLaunchesPerDay", "checkMinutes", "minWallets", "takeProfitX", "paused"];
   for (const s of Array.isArray(list) ? list : [list]) {
     if (!s?.id || settings.seedSettingsApplied.includes(s.id)) continue;
     const body = Object.fromEntries(Object.entries(s.settings ?? {}).filter(([k]) => allowed.includes(k)));

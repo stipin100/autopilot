@@ -2,12 +2,20 @@
   {
     "id": "2026-11-06-overnight",
     "why": "Owner asked: run the 10 new coins 12 AM - 7 AM (22:00 start keeps tonight's last coins going)",
-    "settings": { "windowStart": 22, "windowEnd": 7, "maxLaunchesPerDay": 15 }
+    "settings": {
+      "windowStart": 22,
+      "windowEnd": 7,
+      "maxLaunchesPerDay": 15
+    }
   },
   {
     "id": "2026-11-06-pay-first",
     "why": "Owner asked: coins with pay / paid / fee in the name go out first",
-    "queueFirst": ["AGPAID", "PADPAY", "FEERADAR"]
+    "queueFirst": [
+      "AGPAID",
+      "PADPAY",
+      "FEERADAR"
+    ]
   },
   {
     "id": "2026-11-07-clear-ideas",
@@ -17,6 +25,20 @@
   {
     "id": "2026-11-07-twelve-in-20h",
     "why": "Owner asked: 12 new coins, start 2 hours from now (12 PM), 1 launch each, all within 20 hours (by 8 AM)",
-    "settings": { "windowStart": 12, "windowEnd": 8, "minGapMinutes": 100, "maxLaunchesPerDay": 20, "triesPerDay": 1, "maxDays": 1 }
+    "settings": {
+      "windowStart": 12,
+      "windowEnd": 8,
+      "minGapMinutes": 100,
+      "maxLaunchesPerDay": 20,
+      "triesPerDay": 1,
+      "maxDays": 1
+    }
+  },
+  {
+    "id": "2026-11-08-stop-all",
+    "why": "Owner asked: stop all launches (losing streak). Nothing new goes out until unpaused on the dashboard.",
+    "settings": {
+      "paused": true
+    }
   }
 ]
