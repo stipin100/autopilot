@@ -1,23 +1,260 @@
 [
-  { "name": "Refund Agent", "symbol": "REFUNDAI", "tagline": "your wallet pays you back", "description": "Finds stuck rent, empty token accounts and dust in your wallet and claims the SOL back in one tap.", "whatIf": "What if your wallet paid you back?" },
-  { "name": "Bridge Agent", "symbol": "BRIDGEAI", "tagline": "move it in one sentence", "description": "Say 'move my USDC to Base' and the agent finds the cheapest, fastest bridge and does it.", "whatIf": "What if bridging was just one sentence?" },
-  { "name": "Price Agent", "symbol": "PRICEAI", "tagline": "alerts you just say", "description": "Set price alerts by chatting: 'tell me when SOL hits 250'. It watches and pings you.", "whatIf": "What if your alerts listened to you?" },
-  { "name": "Bot Builder", "symbol": "BOTBUILD", "tagline": "describe it, it trades", "description": "Describe a trading bot in plain words and the agent builds it, tests it and runs it for you.", "whatIf": "What if you could build a bot by describing it?" },
-  { "name": "Wallet Doctor", "symbol": "WALLETDOC", "tagline": "a checkup for your wallet", "description": "Scans your wallet for risky approvals, scam dust and dead tokens, then cleans it up in one tap.", "whatIf": "What if your wallet got a checkup every day?" },
-  { "name": "News Agent", "symbol": "NEWSAI", "tagline": "5 lines that matter", "description": "Reads crypto news all day and sends you the five lines that actually matter.", "whatIf": "What if all the news fit in five lines?" },
-  { "name": "Split Agent", "symbol": "SPLITAI", "tagline": "split it in one link", "description": "Splits any bill between friends on-chain: one link, everyone pays their part.", "whatIf": "What if splitting a bill took one link?" },
-  { "name": "Invoice Agent", "symbol": "INVOICEAI", "tagline": "get paid in crypto, easy", "description": "Makes a crypto invoice from one sentence, sends it and tracks when it's paid.", "whatIf": "What if invoices wrote themselves?" },
-  { "name": "Mint Agent", "symbol": "MINTAGENT", "tagline": "one prompt, one collection", "description": "Turns one prompt or image into a full NFT collection: art, traits and mint page.", "whatIf": "What if one prompt made a whole collection?" },
-  { "name": "Support Agent", "symbol": "SUPPORTAI", "tagline": "24/7 help for any project", "description": "An AI support bot for any project's Telegram or Discord, trained on its own docs, awake 24/7.", "whatIf": "What if your community never waited for an answer?" },
-
-  { "idea": true, "name": "Grant Agent", "symbol": "GRANTAI", "tagline": "find grants, get funded", "description": "Finds crypto grants your project fits and writes the application for you.", "whatIf": "What if an agent got your project funded?" },
-  { "idea": true, "name": "Audit Agent", "symbol": "AUDITAI", "tagline": "contracts in plain English", "description": "Reads any smart contract and explains its risks in plain English before you touch it.", "whatIf": "What if every contract explained itself?" },
-  { "idea": true, "name": "Clip Agent", "symbol": "CLIPAI", "tagline": "long streams, short clips", "description": "Turns long Spaces and streams into short, ready-to-post clips for X.", "whatIf": "What if every Space became ten clips?" },
-  { "idea": true, "name": "Job Agent", "symbol": "JOBAGENT", "tagline": "paid gigs, found for you", "description": "Matches you to paid crypto gigs and bounties that fit your skills.", "whatIf": "What if the gigs came to you?" },
-  { "idea": true, "name": "Portfolio Agent", "symbol": "PORTAI", "tagline": "all wallets, one view", "description": "One clean view of all your wallets, explained in plain words every morning.", "whatIf": "What if your portfolio explained itself daily?" },
-  { "idea": true, "name": "DCA Agent", "symbol": "DCAAGENT", "tagline": "buy on schedule, smarter", "description": "Buys your favorite coins on a schedule and picks smarter moments to do it.", "whatIf": "What if your DCA had a brain?" },
-  { "idea": true, "name": "Lend Agent", "symbol": "LENDAI", "tagline": "best rate, every time", "description": "Finds the best place to lend or borrow on Solana and moves when rates change.", "whatIf": "What if your loans always had the best rate?" },
-  { "idea": true, "name": "Quest Agent", "symbol": "QUESTAI", "tagline": "quests that pay on-chain", "description": "Runs community quests for projects and pays the winners on-chain automatically.", "whatIf": "What if quests paid out by themselves?" },
-  { "idea": true, "name": "Lingo Agent", "symbol": "LINGOAI", "tagline": "speak every community", "description": "Translates your posts and chats so your project can talk to every country.", "whatIf": "What if your project spoke every language?" },
-  { "idea": true, "name": "Scam Inbox", "symbol": "SCAMBOX", "tagline": "forward it, know it", "description": "Forward any suspicious DM or link and the agent tells you in seconds if it's a scam.", "whatIf": "What if every scam got caught before you clicked?" }
+ {
+  "name": "Refund Agent",
+  "symbol": "REFUNDAI",
+  "tagline": "your wallet pays you back",
+  "description": "Finds stuck rent, empty token accounts and dust in your wallet and claims the SOL back in one tap.",
+  "whatIf": "What if your wallet paid you back?"
+ },
+ {
+  "name": "Bridge Agent",
+  "symbol": "BRIDGEAI",
+  "tagline": "move it in one sentence",
+  "description": "Say 'move my USDC to Base' and the agent finds the cheapest, fastest bridge and does it.",
+  "whatIf": "What if bridging was just one sentence?"
+ },
+ {
+  "name": "Price Agent",
+  "symbol": "PRICEAI",
+  "tagline": "alerts you just say",
+  "description": "Set price alerts by chatting: 'tell me when SOL hits 250'. It watches and pings you.",
+  "whatIf": "What if your alerts listened to you?"
+ },
+ {
+  "name": "Bot Builder",
+  "symbol": "BOTBUILD",
+  "tagline": "describe it, it trades",
+  "description": "Describe a trading bot in plain words and the agent builds it, tests it and runs it for you.",
+  "whatIf": "What if you could build a bot by describing it?"
+ },
+ {
+  "name": "Wallet Doctor",
+  "symbol": "WALLETDOC",
+  "tagline": "a checkup for your wallet",
+  "description": "Scans your wallet for risky approvals, scam dust and dead tokens, then cleans it up in one tap.",
+  "whatIf": "What if your wallet got a checkup every day?"
+ },
+ {
+  "name": "News Agent",
+  "symbol": "NEWSAI",
+  "tagline": "5 lines that matter",
+  "description": "Reads crypto news all day and sends you the five lines that actually matter.",
+  "whatIf": "What if all the news fit in five lines?"
+ },
+ {
+  "name": "Split Agent",
+  "symbol": "SPLITAI",
+  "tagline": "split it in one link",
+  "description": "Splits any bill between friends on-chain: one link, everyone pays their part.",
+  "whatIf": "What if splitting a bill took one link?"
+ },
+ {
+  "name": "Invoice Agent",
+  "symbol": "INVOICEAI",
+  "tagline": "get paid in crypto, easy",
+  "description": "Makes a crypto invoice from one sentence, sends it and tracks when it's paid.",
+  "whatIf": "What if invoices wrote themselves?"
+ },
+ {
+  "name": "Mint Agent",
+  "symbol": "MINTAGENT",
+  "tagline": "one prompt, one collection",
+  "description": "Turns one prompt or image into a full NFT collection: art, traits and mint page.",
+  "whatIf": "What if one prompt made a whole collection?"
+ },
+ {
+  "name": "Support Agent",
+  "symbol": "SUPPORTAI",
+  "tagline": "24/7 help for any project",
+  "description": "An AI support bot for any project's Telegram or Discord, trained on its own docs, awake 24/7.",
+  "whatIf": "What if your community never waited for an answer?"
+ },
+ {
+  "idea": true,
+  "name": "Grant Agent",
+  "symbol": "GRANTAI",
+  "tagline": "find grants, get funded",
+  "description": "Finds crypto grants your project fits and writes the application for you.",
+  "whatIf": "What if an agent got your project funded?"
+ },
+ {
+  "idea": true,
+  "name": "Audit Agent",
+  "symbol": "AUDITAI",
+  "tagline": "contracts in plain English",
+  "description": "Reads any smart contract and explains its risks in plain English before you touch it.",
+  "whatIf": "What if every contract explained itself?"
+ },
+ {
+  "idea": true,
+  "name": "Clip Agent",
+  "symbol": "CLIPAI",
+  "tagline": "long streams, short clips",
+  "description": "Turns long Spaces and streams into short, ready-to-post clips for X.",
+  "whatIf": "What if every Space became ten clips?"
+ },
+ {
+  "idea": true,
+  "name": "Job Agent",
+  "symbol": "JOBAGENT",
+  "tagline": "paid gigs, found for you",
+  "description": "Matches you to paid crypto gigs and bounties that fit your skills.",
+  "whatIf": "What if the gigs came to you?"
+ },
+ {
+  "idea": true,
+  "name": "Portfolio Agent",
+  "symbol": "PORTAI",
+  "tagline": "all wallets, one view",
+  "description": "One clean view of all your wallets, explained in plain words every morning.",
+  "whatIf": "What if your portfolio explained itself daily?"
+ },
+ {
+  "idea": true,
+  "name": "DCA Agent",
+  "symbol": "DCAAGENT",
+  "tagline": "buy on schedule, smarter",
+  "description": "Buys your favorite coins on a schedule and picks smarter moments to do it.",
+  "whatIf": "What if your DCA had a brain?"
+ },
+ {
+  "idea": true,
+  "name": "Lend Agent",
+  "symbol": "LENDAI",
+  "tagline": "best rate, every time",
+  "description": "Finds the best place to lend or borrow on Solana and moves when rates change.",
+  "whatIf": "What if your loans always had the best rate?"
+ },
+ {
+  "idea": true,
+  "name": "Quest Agent",
+  "symbol": "QUESTAI",
+  "tagline": "quests that pay on-chain",
+  "description": "Runs community quests for projects and pays the winners on-chain automatically.",
+  "whatIf": "What if quests paid out by themselves?"
+ },
+ {
+  "idea": true,
+  "name": "Lingo Agent",
+  "symbol": "LINGOAI",
+  "tagline": "speak every community",
+  "description": "Translates your posts and chats so your project can talk to every country.",
+  "whatIf": "What if your project spoke every language?"
+ },
+ {
+  "idea": true,
+  "name": "Scam Inbox",
+  "symbol": "SCAMBOX",
+  "tagline": "forward it, know it",
+  "description": "Forward any suspicious DM or link and the agent tells you in seconds if it's a scam.",
+  "whatIf": "What if every scam got caught before you clicked?"
+ },
+ {
+  "name": "Cat Shares",
+  "symbol": "CATSHARES",
+  "tagline": "buy tokenized stocks with SOL",
+  "description": "Buy tokenized stocks like NVDA and TSLA with SOL, 24/7, in one tap - no broker, no market hours.",
+  "whatIf": "What if Wall Street never closed?",
+  "art": "seed-art/catshares",
+  "accent": "#00e5ff"
+ },
+ {
+  "name": "Cat Cloud",
+  "symbol": "CATCLOUD",
+  "tagline": "memory for AI agents",
+  "description": "A memory and storage cloud for AI agents: agents rent GB by the hour and pay in SOL, so they remember everything.",
+  "whatIf": "What if every AI agent had a memory?",
+  "art": "seed-art/catcloud",
+  "accent": "#7b8cff"
+ },
+ {
+  "name": "Doge Inbox",
+  "symbol": "DOGEINBOX",
+  "tagline": "messages between wallets",
+  "description": "Wallet-to-wallet messages with an AI inbox agent that sorts deals, flags scams and drafts replies for you.",
+  "whatIf": "What if your wallet had an inbox?",
+  "art": "seed-art/dogeinbox",
+  "accent": "#ff8a00"
+ },
+ {
+  "name": "Cat Support",
+  "symbol": "CATSUPPORT",
+  "tagline": "support that never sleeps",
+  "description": "An AI support agent for coin communities: answers holders in Telegram and X 24/7 with the real CA, links and updates.",
+  "whatIf": "What if your community manager never slept?",
+  "art": "seed-art/catsupport",
+  "accent": "#ff4fd8"
+ },
+ {
+  "name": "Meme Pilot",
+  "symbol": "MEMEPILOT",
+  "tagline": "your trades on autopilot",
+  "description": "An autopilot trading agent: set your rules once - size, take-profit, stop - and it trades memecoins for you.",
+  "whatIf": "What if your trades flew themselves?",
+  "art": "seed-art/memepilot",
+  "accent": "#b6ff3b"
+ },
+ {
+  "name": "Doge Hedge",
+  "symbol": "DOGEHEDGE",
+  "tagline": "bags protected",
+  "description": "An AI hedging agent that opens small shorts to protect your bags when the market turns, and closes them when it's over.",
+  "whatIf": "What if your bags had insurance?",
+  "art": "seed-art/dogehedge",
+  "accent": "#7b8cff"
+ },
+ {
+  "name": "Cat Bank",
+  "symbol": "CATBANK",
+  "tagline": "save a cut of every win",
+  "description": "A USDC savings account that auto-saves a cut of every memecoin win, so you keep some profit every time.",
+  "whatIf": "What if every win saved itself?",
+  "art": "seed-art/catbank",
+  "accent": "#ffd23f"
+ },
+ {
+  "name": "Doge Yield",
+  "symbol": "DOGEYIELD",
+  "tagline": "idle SOL earns",
+  "description": "An AI yield agent that moves your idle SOL and USDC to the best safe rate every day, no farming by hand.",
+  "whatIf": "What if your idle SOL worked night shifts?",
+  "art": "seed-art/dogeyield",
+  "accent": "#ffd23f"
+ },
+ {
+  "name": "Pumpfun Cat",
+  "symbol": "PFCAT",
+  "tagline": "your launch copilot",
+  "description": "A Pump.fun copilot: AI picks the launch time, writes the post and manages your dev bag for you.",
+  "whatIf": "What if every launch had a copilot?",
+  "art": "seed-art/pfcat",
+  "accent": "#39ff88"
+ },
+ {
+  "name": "Doge Exit",
+  "symbol": "DOGEEXIT",
+  "tagline": "exits that never sleep",
+  "description": "An AI agent that babysits your bags 24/7: stop-loss, take-profit and instant exits when a dev dumps.",
+  "whatIf": "What if your exit was always ready?",
+  "art": "seed-art/dogeexit",
+  "accent": "#c9b8ff"
+ },
+ {
+  "name": "Cat Launcher",
+  "symbol": "CATLAUNCH",
+  "tagline": "launch in a minute",
+  "description": "A one-click Pump.fun launcher: type a name and it makes the logo, site and post, then launches in under a minute.",
+  "whatIf": "What if launching took one minute?",
+  "art": "seed-art/catlaunch",
+  "accent": "#ff8a00"
+ },
+ {
+  "name": "Doge Bridge",
+  "symbol": "DOGEBRIDGE",
+  "tagline": "bridge in one sentence",
+  "description": "Bridge anything to Solana in one sentence: say 'move my ETH to Solana' and the AI picks the cheapest, fastest route.",
+  "whatIf": "What if bridging was one sentence?",
+  "art": "seed-art/dogebridge",
+  "accent": "#00e5ff"
+ }
 ]

@@ -40,5 +40,33 @@
     "settings": {
       "paused": true
     }
+  },
+  {
+    "id": "2026-11-08-batch7-peak",
+    "why": "Owner asked: set up AUTOPILOT like the launchpad - clear old coins, 12 new cat/doge/meme utility + agent coins with pixel art, 1 launch each, peak hours only (10 PM - 8 AM PH)",
+    "clearIdeas": true,
+    "keep": [
+      "CATSHARES",
+      "CATCLOUD",
+      "DOGEINBOX",
+      "CATSUPPORT",
+      "MEMEPILOT",
+      "DOGEHEDGE",
+      "CATBANK",
+      "DOGEYIELD",
+      "PFCAT",
+      "DOGEEXIT",
+      "CATLAUNCH",
+      "DOGEBRIDGE"
+    ],
+    "settings": {
+      "windowStart": 22,
+      "windowEnd": 8,
+      "minGapMinutes": 50,
+      "maxLaunchesPerDay": 12,
+      "triesPerDay": 1,
+      "maxDays": 1,
+      "paused": false
+    }
   }
 ]

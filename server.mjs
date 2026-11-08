@@ -2518,6 +2518,16 @@ function importSeed() {
       word: "", why: "added for you by Claude", xPost: `${name} $${symbol} is live\n\nCA: {CA}`, xAccountId: "auto",
       check: checkName({ name, symbol }, ideaContext()),
     }, "you");
+    // art: "seed-art/<folder>" with logo.png + banner.png made in the chat - used instead of making new art
+    const artDir = it.art && path.join(ROOT, String(it.art).replace(/\.\./g, ""));
+    if (artDir && fs.existsSync(path.join(artDir, "logo.png")) && fs.existsSync(path.join(artDir, "banner.png"))) {
+      const stamp = Date.now().toString(36);
+      b.image = `b-${b.id}-${stamp}.png`; b.imageType = "image/png"; b.banner = `b-${b.id}-${stamp}-banner.png`;
+      fs.copyFileSync(path.join(artDir, "logo.png"), path.join(IMAGES, b.image));
+      fs.copyFileSync(path.join(artDir, "banner.png"), path.join(IMAGES, b.banner));
+      b.palette = { bg: "#050505", ink: "#ffffff", accent: /^#[0-9a-f]{6}$/i.test(it.accent ?? "") ? it.accent : "#39ff88", style: "neon" };
+      b.prep = { art: "chat" };
+    }
     if (it.idea) { apLog(`${name} $${symbol} added as an idea - waiting for your OK`); added++; continue; } // just an idea: waits in Ideas for approval
     Object.assign(b, { status: "approved", approvedAt: Date.now(), order: Math.max(0, ...brands.filter((x) => x.status === "approved").map((x) => x.order + 1)) });
     slugOf(b);
@@ -2557,6 +2567,7 @@ function importSeedSettings() {
     if (s.clearIdeas) {
       const gone = [];
       for (const b of brands) {
+        if ((s.keep ?? []).includes(b.symbol)) continue; // coins added in the same chat stay
         if (b.status === "idea") { b.status = "rejected"; gone.push(b.name); }
         else if (b.status === "approved") { b.status = "retired"; gone.push(b.name); }
       }
