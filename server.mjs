@@ -69,6 +69,7 @@ function drainRpc() {
   }
 }
 setInterval(() => { rpcTokens = Math.min(RPC_PER_SEC, rpcTokens + RPC_PER_SEC / 10); drainRpc(); }, 100).unref();
+let rpcQuotaAt = 0; // last time the RPC said its monthly allowance is used up
 async function rpcFetch(url, init) {
   let methods = [];
   try { const b = JSON.parse(init?.body ?? "{}"); methods = (Array.isArray(b) ? b : [b]).map((x) => x.method); } catch {}
@@ -76,6 +77,7 @@ async function rpcFetch(url, init) {
   for (let attempt = 0; ; attempt++) {
     await new Promise((go) => { lanes[lane].push({ cost: Math.max(1, methods.length), go }); drainRpc(); });
     const r = await fetch(url, init);
+    if (r.status === 429 && /max usage|credits/i.test(await r.clone().text().catch(() => ""))) { rpcQuotaAt = Date.now(); return r; } // monthly allowance used up: retrying won't help
     if (r.status !== 429 || attempt >= 4) return r;
     await sleep(400 * 2 ** attempt); // over the limit anyway: back off instead of hammering
   }
@@ -906,7 +908,14 @@ async function step(c) {
     case "checks":
     case "earning":
     case "dud": {
-      const every = c.stage === "checks" ? 4_000 : c.stage === "earning" ? 15_000 : 60_000;
+      // How often to look at this coin. Old duds/sold coins only need a rare look for creator fees - scanning
+      // dozens of them every minute is what used up the RPC's monthly allowance.
+      const age = now - (c.soldAt ?? c.launchedAt ?? now);
+      const unfinished = (c.stage === "dud" && c.autoSellDud && !c.soldAt && (c.stats.devBagSol ?? 0) > 0.001) || (c.soldAt && (c.stats.walletSol ?? 0) > 0.02);
+      const every = c.stage === "checks" ? 4_000
+        : unfinished ? 60_000
+        : c.stage === "earning" && !c.soldAt ? (age < 3_600_000 ? 15_000 : age < 86_400_000 ? 60_000 : 300_000)
+        : age < 900_000 ? 60_000 : age < 86_400_000 ? 900_000 : 7_200_000;
       if (now - (c.lastScan ?? 0) < every) return;
       c.lastScan = now;
       if (SIMULATE) simTick(c);
@@ -1397,6 +1406,7 @@ async function autopilotTick() {
     return void (apStatus = waiting ? `Next retry: ${waiting.name} in ${Math.ceil((waiting.nextTryAt - now) / 60_000)} min` : "Queue is empty - approve some ideas");
   }
   if (!SIMULATE) {
+    if (now - rpcQuotaAt < 180_000) return void (apStatus = "Solana connection (RPC) is out of credits - put a new SOLANA_RPC_URL in Keys");
     if (!PINATA_JWT) return void (apStatus = "PINATA_JWT is missing - launches can't upload");
     const need = s.devBuySol + FUND_EXTRA_SOL + 0.002;
     const have = await mainBalance();
@@ -1564,9 +1574,10 @@ function coinProblemAlert(c, msg) {
   } catch {}
 }
 let windowOpenedAt = 0, holdKind = "", holdSince = 0;
-const BLOCKING = /^(Float too low|Problem|Spending lock|Paused|Autopilot is off|Daily cap|PINATA_JWT|A launch is getting ready)/;
+const BLOCKING = /^(Solana connection|Float too low|Problem|Spending lock|Paused|Autopilot is off|Daily cap|PINATA_JWT|A launch is getting ready)/;
 function watchAlerts() {
   const now = Date.now();
+  if (now - rpcQuotaAt < 60_000) alertOnce("rpc-quota", "AUTOPILOT: Solana connection ran out", "Your RPC (Helius) says its monthly allowance is used up, so nothing can launch, sell or claim. Put a new SOLANA_RPC_URL in Keys, or upgrade the plan.", 6 * 60 * 60_000);
   const open = inWindow();
   if (!open) { windowOpenedAt = 0; holdKind = ""; return; }
   if (!windowOpenedAt) windowOpenedAt = now;
