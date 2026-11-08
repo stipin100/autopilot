@@ -68,5 +68,33 @@
       "maxDays": 1,
       "paused": false
     }
+  },
+  {
+    "id": "2026-11-08-batch7b-plain-names",
+    "why": "Owner asked: no memes or animals in names + new flat app-icon logos - retire the 12 cat/doge coins, keep only the 12 new ones",
+    "clearIdeas": true,
+    "keep": [
+      "SHAREDESK",
+      "MEMCLOUD",
+      "CHAINMAIL",
+      "HOLDERDESK",
+      "TRADEPILOT",
+      "COVERAGENT",
+      "WINBANK",
+      "IDLEYIELD",
+      "LCOACH",
+      "EXITAGENT",
+      "QLAUNCH",
+      "SAYBRIDGE"
+    ],
+    "settings": {
+      "windowStart": 22,
+      "windowEnd": 8,
+      "minGapMinutes": 50,
+      "maxLaunchesPerDay": 12,
+      "triesPerDay": 1,
+      "maxDays": 1,
+      "paused": false
+    }
   }
 ]

@@ -150,111 +150,111 @@
   "whatIf": "What if every scam got caught before you clicked?"
  },
  {
-  "name": "Cat Shares",
-  "symbol": "CATSHARES",
-  "tagline": "buy tokenized stocks with SOL",
+  "name": "Share Desk",
+  "symbol": "SHAREDESK",
+  "tagline": "tokenized stocks with SOL",
   "description": "Buy tokenized stocks like NVDA and TSLA with SOL, 24/7, in one tap - no broker, no market hours.",
   "whatIf": "What if Wall Street never closed?",
-  "art": "seed-art/catshares",
-  "accent": "#00e5ff"
+  "art": "seed-art/sharedesk",
+  "accent": "#1f5bff"
  },
  {
-  "name": "Cat Cloud",
-  "symbol": "CATCLOUD",
+  "name": "Memory Cloud",
+  "symbol": "MEMCLOUD",
   "tagline": "memory for AI agents",
   "description": "A memory and storage cloud for AI agents: agents rent GB by the hour and pay in SOL, so they remember everything.",
   "whatIf": "What if every AI agent had a memory?",
-  "art": "seed-art/catcloud",
-  "accent": "#7b8cff"
+  "art": "seed-art/memcloud",
+  "accent": "#cfc4f0"
  },
  {
-  "name": "Doge Inbox",
-  "symbol": "DOGEINBOX",
+  "name": "Chain Mail",
+  "symbol": "CHAINMAIL",
   "tagline": "messages between wallets",
   "description": "Wallet-to-wallet messages with an AI inbox agent that sorts deals, flags scams and drafts replies for you.",
   "whatIf": "What if your wallet had an inbox?",
-  "art": "seed-art/dogeinbox",
-  "accent": "#ff8a00"
+  "art": "seed-art/chainmail",
+  "accent": "#f02d9a"
  },
  {
-  "name": "Cat Support",
-  "symbol": "CATSUPPORT",
+  "name": "Holder Desk",
+  "symbol": "HOLDERDESK",
   "tagline": "support that never sleeps",
   "description": "An AI support agent for coin communities: answers holders in Telegram and X 24/7 with the real CA, links and updates.",
   "whatIf": "What if your community manager never slept?",
-  "art": "seed-art/catsupport",
-  "accent": "#ff4fd8"
+  "art": "seed-art/holderdesk",
+  "accent": "#1fd16b"
  },
  {
-  "name": "Meme Pilot",
-  "symbol": "MEMEPILOT",
+  "name": "Trade Pilot",
+  "symbol": "TRADEPILOT",
   "tagline": "your trades on autopilot",
-  "description": "An autopilot trading agent: set your rules once - size, take-profit, stop - and it trades memecoins for you.",
+  "description": "An autopilot trading agent: set your rules once - size, take-profit, stop - and it trades for you.",
   "whatIf": "What if your trades flew themselves?",
-  "art": "seed-art/memepilot",
-  "accent": "#b6ff3b"
+  "art": "seed-art/tradepilot",
+  "accent": "#d4f53c"
  },
  {
-  "name": "Doge Hedge",
-  "symbol": "DOGEHEDGE",
+  "name": "Cover Agent",
+  "symbol": "COVERAGENT",
   "tagline": "bags protected",
   "description": "An AI hedging agent that opens small shorts to protect your bags when the market turns, and closes them when it's over.",
   "whatIf": "What if your bags had insurance?",
-  "art": "seed-art/dogehedge",
-  "accent": "#7b8cff"
+  "art": "seed-art/coveragent",
+  "accent": "#6a2cf0"
  },
  {
-  "name": "Cat Bank",
-  "symbol": "CATBANK",
+  "name": "Win Bank",
+  "symbol": "WINBANK",
   "tagline": "save a cut of every win",
-  "description": "A USDC savings account that auto-saves a cut of every memecoin win, so you keep some profit every time.",
+  "description": "A USDC savings account that auto-saves a cut of every trading win, so you keep some profit every time.",
   "whatIf": "What if every win saved itself?",
-  "art": "seed-art/catbank",
-  "accent": "#ffd23f"
+  "art": "seed-art/winbank",
+  "accent": "#ff6b1a"
  },
  {
-  "name": "Doge Yield",
-  "symbol": "DOGEYIELD",
+  "name": "Idle Yield",
+  "symbol": "IDLEYIELD",
   "tagline": "idle SOL earns",
   "description": "An AI yield agent that moves your idle SOL and USDC to the best safe rate every day, no farming by hand.",
   "whatIf": "What if your idle SOL worked night shifts?",
-  "art": "seed-art/dogeyield",
-  "accent": "#ffd23f"
+  "art": "seed-art/idleyield",
+  "accent": "#1fd16b"
  },
  {
-  "name": "Pumpfun Cat",
-  "symbol": "PFCAT",
+  "name": "Launch Coach",
+  "symbol": "LCOACH",
   "tagline": "your launch copilot",
-  "description": "A Pump.fun copilot: AI picks the launch time, writes the post and manages your dev bag for you.",
-  "whatIf": "What if every launch had a copilot?",
-  "art": "seed-art/pfcat",
-  "accent": "#39ff88"
+  "description": "A Pump.fun launch copilot: AI picks the launch time, writes the post and manages your dev bag for you.",
+  "whatIf": "What if every launch had a coach?",
+  "art": "seed-art/lcoach",
+  "accent": "#1f5bff"
  },
  {
-  "name": "Doge Exit",
-  "symbol": "DOGEEXIT",
+  "name": "Exit Agent",
+  "symbol": "EXITAGENT",
   "tagline": "exits that never sleep",
-  "description": "An AI agent that babysits your bags 24/7: stop-loss, take-profit and instant exits when a dev dumps.",
+  "description": "An AI agent that watches your bags 24/7: stop-loss, take-profit and instant exits when a dev dumps.",
   "whatIf": "What if your exit was always ready?",
-  "art": "seed-art/dogeexit",
-  "accent": "#c9b8ff"
+  "art": "seed-art/exitagent",
+  "accent": "#cfc4f0"
  },
  {
-  "name": "Cat Launcher",
-  "symbol": "CATLAUNCH",
+  "name": "Quick Launch",
+  "symbol": "QLAUNCH",
   "tagline": "launch in a minute",
   "description": "A one-click Pump.fun launcher: type a name and it makes the logo, site and post, then launches in under a minute.",
   "whatIf": "What if launching took one minute?",
-  "art": "seed-art/catlaunch",
-  "accent": "#ff8a00"
+  "art": "seed-art/qlaunch",
+  "accent": "#ffffff"
  },
  {
-  "name": "Doge Bridge",
-  "symbol": "DOGEBRIDGE",
+  "name": "Say Bridge",
+  "symbol": "SAYBRIDGE",
   "tagline": "bridge in one sentence",
   "description": "Bridge anything to Solana in one sentence: say 'move my ETH to Solana' and the AI picks the cheapest, fastest route.",
   "whatIf": "What if bridging was one sentence?",
-  "art": "seed-art/dogebridge",
-  "accent": "#00e5ff"
+  "art": "seed-art/saybridge",
+  "accent": "#22d3ee"
  }
 ]
